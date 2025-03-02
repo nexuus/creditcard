@@ -42,7 +42,7 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
     private var _benefits: [CardBenefit]?
     
     // Bonus categories - need special handling for Codable
-    private var _bonusCategories: [CardBonusCategory]?
+    private var _bonusCategories: [SpendBonusCategory]?
     
     // Annual spending bonuses
     var annualSpendBonuses: [String]?
@@ -70,13 +70,108 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
         case hasLoungeAccess, hasFreeHotelNight, hasFreeCheckedBag, hasTrustedTraveler
     }
     
+    // Add this initializer to your CreditCardInfo.swift file:
+
+    init(id: String, name: String, issuer: String, category: String, description: String,
+         annualFee: Double, signupBonus: Int, regularAPR: String, imageName: String, applyURL: String) {
+        self.id = id
+        self.name = name
+        self.issuer = issuer
+        self.category = category
+        self.description = description
+        self.annualFee = annualFee
+        self.signupBonus = signupBonus
+        self.regularAPR = regularAPR
+        self.imageName = imageName
+        self.applyURL = applyURL
+    }
+    
+    
+    // Custom initializer for Decodable conformance
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Decode regular properties
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        issuer = try container.decode(String.self, forKey: .issuer)
+        category = try container.decode(String.self, forKey: .category)
+        description = try container.decode(String.self, forKey: .description)
+        annualFee = try container.decode(Double.self, forKey: .annualFee)
+        signupBonus = try container.decode(Int.self, forKey: .signupBonus)
+        regularAPR = try container.decode(String.self, forKey: .regularAPR)
+        imageName = try container.decode(String.self, forKey: .imageName)
+        applyURL = try container.decode(String.self, forKey: .applyURL)
+        
+        // Decode optional properties
+        cardNetwork = try container.decodeIfPresent(String.self, forKey: .cardNetwork)
+        cardType = try container.decodeIfPresent(String.self, forKey: .cardType)
+        fxFee = try container.decodeIfPresent(Double.self, forKey: .fxFee)
+        creditRange = try container.decodeIfPresent(String.self, forKey: .creditRange)
+        
+        signupBonusType = try container.decodeIfPresent(String.self, forKey: .signupBonusType)
+        signupBonusCategory = try container.decodeIfPresent(String.self, forKey: .signupBonusCategory)
+        signupBonusSpend = try container.decodeIfPresent(Int.self, forKey: .signupBonusSpend)
+        signupBonusLength = try container.decodeIfPresent(Int.self, forKey: .signupBonusLength)
+        signupBonusLengthPeriod = try container.decodeIfPresent(String.self, forKey: .signupBonusLengthPeriod)
+        
+        // Decode the properties with private backing storage
+        _benefits = try container.decodeIfPresent([CardBenefit].self, forKey: ._benefits)
+        _bonusCategories = try container.decodeIfPresent([SpendBonusCategory].self, forKey: ._bonusCategories)
+        
+        annualSpendBonuses = try container.decodeIfPresent([String].self, forKey: .annualSpendBonuses)
+        hasLoungeAccess = try container.decodeIfPresent(Bool.self, forKey: .hasLoungeAccess)
+        hasFreeHotelNight = try container.decodeIfPresent(Bool.self, forKey: .hasFreeHotelNight)
+        hasFreeCheckedBag = try container.decodeIfPresent(Bool.self, forKey: .hasFreeCheckedBag)
+        hasTrustedTraveler = try container.decodeIfPresent(Bool.self, forKey: .hasTrustedTraveler)
+    }
+    
+    // Custom encoder for Encodable conformance
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        // Encode regular properties
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(issuer, forKey: .issuer)
+        try container.encode(category, forKey: .category)
+        try container.encode(description, forKey: .description)
+        try container.encode(annualFee, forKey: .annualFee)
+        try container.encode(signupBonus, forKey: .signupBonus)
+        try container.encode(regularAPR, forKey: .regularAPR)
+        try container.encode(imageName, forKey: .imageName)
+        try container.encode(applyURL, forKey: .applyURL)
+        
+        // Encode optional properties
+        try container.encodeIfPresent(cardNetwork, forKey: .cardNetwork)
+        try container.encodeIfPresent(cardType, forKey: .cardType)
+        try container.encodeIfPresent(fxFee, forKey: .fxFee)
+        try container.encodeIfPresent(creditRange, forKey: .creditRange)
+        
+        try container.encodeIfPresent(signupBonusType, forKey: .signupBonusType)
+        try container.encodeIfPresent(signupBonusCategory, forKey: .signupBonusCategory)
+        try container.encodeIfPresent(signupBonusSpend, forKey: .signupBonusSpend)
+        try container.encodeIfPresent(signupBonusLength, forKey: .signupBonusLength)
+        try container.encodeIfPresent(signupBonusLengthPeriod, forKey: .signupBonusLengthPeriod)
+        
+        // Encode the properties with private backing storage
+        try container.encodeIfPresent(_benefits, forKey: ._benefits)
+        try container.encodeIfPresent(_bonusCategories, forKey: ._bonusCategories)
+        
+        try container.encodeIfPresent(annualSpendBonuses, forKey: .annualSpendBonuses)
+        try container.encodeIfPresent(hasLoungeAccess, forKey: .hasLoungeAccess)
+        try container.encodeIfPresent(hasFreeHotelNight, forKey: .hasFreeHotelNight)
+        try container.encodeIfPresent(hasFreeCheckedBag, forKey: .hasFreeCheckedBag)
+        try container.encodeIfPresent(hasTrustedTraveler, forKey: .hasTrustedTraveler)
+    }
+    
     // Public accessors for private properties
     var benefits: [CardBenefit]? {
         get { return _benefits }
         set { _benefits = newValue }
     }
     
-    var bonusCategories: [CardBonusCategory]? {
+    var bonusCategories: [SpendBonusCategory]? {
         get { return _bonusCategories }
         set { _bonusCategories = newValue }
     }
@@ -142,41 +237,30 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
     }
 }
 
-// Card benefit model
-struct CardBenefit: Codable, Identifiable, Hashable {
-    var benefitTitle: String
-    var benefitDesc: String
-    
+// Extend the CardBenefit from APIModels to add Identifiable and Hashable
+extension CardBenefit: Identifiable, Hashable {
     // Computed property for id since it's not in the JSON
     var id: String { benefitTitle }
     
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(benefitTitle)
     }
     
-    static func == (lhs: CardBenefit, rhs: CardBenefit) -> Bool {
+    public static func == (lhs: CardBenefit, rhs: CardBenefit) -> Bool {
         return lhs.benefitTitle == rhs.benefitTitle
     }
 }
 
-// Spend bonus category model
-struct CardBonusCategory: Codable, Identifiable, Hashable {
-    var spendBonusCategoryType: String
-    var spendBonusCategoryName: String
-    var spendBonusCategoryId: Int
-    var spendBonusCategoryGroup: String
-    var spendBonusSubcategoryGroup: String
-    var spendBonusDesc: String
-    var earnMultiplier: Double
-    
+// Extend SpendBonusCategory from APIModels to add Identifiable and Hashable
+extension SpendBonusCategory: Identifiable, Hashable {
     // Computed property for id
     var id: Int { spendBonusCategoryId }
     
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(spendBonusCategoryId)
     }
     
-    static func == (lhs: CardBonusCategory, rhs: CardBonusCategory) -> Bool {
+    public static func == (lhs: SpendBonusCategory, rhs: SpendBonusCategory) -> Bool {
         return lhs.spendBonusCategoryId == rhs.spendBonusCategoryId
     }
     
@@ -190,7 +274,12 @@ struct CardBonusCategory: Codable, Identifiable, Hashable {
     }
 }
 
-// Annual spend bonus model
-struct AnnualSpendBonus: Codable {
-    var annualSpendDesc: String
+// Use AnyCodable extension from APIModels.swift for annual spend bonuses
+extension AnyCodable {
+    var annualSpendDesc: String {
+        if let str = self.value as? String {
+            return str
+        }
+        return String(describing: self.value)
+    }
 }

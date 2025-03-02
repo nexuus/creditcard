@@ -5,14 +5,6 @@
 //  Created by Hassan  on 2/26/25.
 //
 
-// System frameworks first
-//
-//  CardDetailCatalogView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
 import SwiftUI
 import Foundation
 import Combine
@@ -247,15 +239,15 @@ struct CardDetailCatalogView: View {
                     .font(AppTheme.Typography.headline)
                     .foregroundColor(AppTheme.Colors.text)
                 
-                ModernDetailRow(title: "Card Network", value: displayCard.cardNetwork ?? "Unknown")
-                ModernDetailRow(title: "Card Type", value: displayCard.cardType ?? "Unknown")
-                ModernDetailRow(title: "Credit Range", value: displayCard.creditRange ?? "Unknown")
-                ModernDetailRow(title: "Regular APR", value: displayCard.regularAPR)
+                CatalogDetailRow(title: "Card Network", value: displayCard.cardNetwork ?? "Unknown")
+                CatalogDetailRow(title: "Card Type", value: displayCard.cardType ?? "Unknown")
+                CatalogDetailRow(title: "Credit Range", value: displayCard.creditRange ?? "Unknown")
+                CatalogDetailRow(title: "Regular APR", value: displayCard.regularAPR)
                 
                 if let fxFee = displayCard.fxFee, fxFee > 0 {
-                    ModernDetailRow(title: "Foreign Transaction Fee", value: "\(Int(fxFee * 100))%")
+                    CatalogDetailRow(title: "Foreign Transaction Fee", value: "\(Int(fxFee * 100))%")
                 } else {
-                    ModernDetailRow(title: "Foreign Transaction Fee", value: "None")
+                    CatalogDetailRow(title: "Foreign Transaction Fee", value: "None")
                 }
             }
             .padding()
@@ -313,7 +305,7 @@ struct CardDetailCatalogView: View {
                                     .font(AppTheme.Typography.headline)
                                     .foregroundColor(AppTheme.Colors.categoryColor(for: group))
                                 
-                                ForEach(categories.sorted(by: { $0.earnMultiplier > $1.earnMultiplier })) { category in
+                                ForEach(Array(categories.sorted(by: { $0.earnMultiplier > $1.earnMultiplier })), id: \.id) { category in
                                     BonusCategoryRow(category: category)
                                 }
                             }
@@ -524,7 +516,7 @@ struct BenefitCardView: View {
 
 // Bonus category row
 struct BonusCategoryRow: View {
-    let category: CardBonusCategory
+    let category: SpendBonusCategory
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
@@ -727,6 +719,33 @@ struct CatalogCreditCardView: View {
         .rotation3DEffect(
             Angle(degrees: 180),
             axis: (x: 0, y: 1, z: 0)
+        )
+    }
+}
+
+// Catalog detail row - renamed to avoid conflict with ModernDetailRow in CardDetailView
+struct CatalogDetailRow: View {
+    var title: String
+    var value: String
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundColor(AppTheme.Colors.secondaryText)
+            
+            Spacer()
+            
+            Text(value)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(AppTheme.Colors.text)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(colorScheme == .dark ? Color(.systemGray5).opacity(0.5) : Color(.systemGray6).opacity(0.5))
         )
     }
 }

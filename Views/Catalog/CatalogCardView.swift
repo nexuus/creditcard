@@ -233,7 +233,7 @@ struct KeyValueRow: View {
         applyURL: "https://creditcards.chase.com/rewards-credit-cards/sapphire/preferred"
     )
     
-    return CatalogCardView(card: sampleCard)
+     CatalogCardView(card: sampleCard)
         .padding()
         .previewLayout(.sizeThatFits)
 }

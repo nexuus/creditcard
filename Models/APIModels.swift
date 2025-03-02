@@ -163,7 +163,7 @@ struct CardBenefit: Decodable {
 }
 
 // Spend bonus category model
-struct SpendBonusCategory: Decodable {
+struct SpendBonusCategory: Codable {
     let spendBonusCategoryType: String
     let spendBonusCategoryName: String
     let spendBonusCategoryId: Int
