@@ -299,22 +299,26 @@ struct CardDetailCatalogView: View {
                 
                 LazyVStack(spacing: 20) {
                     ForEach(groupedCategories.keys.sorted(), id: \.self) { group in
-                        if let categories = groupedCategories[group] {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(group)
-                                    .font(AppTheme.Typography.headline)
-                                    .foregroundColor(AppTheme.Colors.categoryColor(for: group))
-                                
-                                ForEach(Array(categories.sorted(by: { $0.earnMultiplier > $1.earnMultiplier })), id: \.id) { category in
-                                    BonusCategoryRow(category: category)
+                        Group {
+                            if let categories = groupedCategories[group] {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(group)
+                                        .font(AppTheme.Typography.headline)
+                                        .foregroundColor(AppTheme.Colors.categoryColor(for: group))
+                                    
+                                    ForEach(Array(categories.sorted(by: { $0.earnMultiplier > $1.earnMultiplier })), id: \.id) { category in
+                                        BonusCategoryRow(category: category)
+                                    }
                                 }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
+                                        .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
+                                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                                )
+                            } else {
+                                EmptyView()
                             }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                                    .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-                            )
                         }
                     }
                 }
@@ -643,7 +647,12 @@ struct CatalogCreditCardView: View {
     
     // Back of the card
     var cardBack: some View {
-        ZStack(alignment: .leading) {
+        // Prepare the formatted bonus text outside the view hierarchy
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        let bonusText = formatter.string(from: NSNumber(value: card.signupBonus)) ?? "\(card.signupBonus)"
+        
+        return ZStack(alignment: .leading) {
             // Background
             RoundedRectangle(cornerRadius: 16)
                 .fill(
@@ -700,10 +709,7 @@ struct CatalogCreditCardView: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white.opacity(0.9))
                             
-                            let formatter = NumberFormatter()
-                            formatter.numberStyle = .decimal
-                            let bonusText = formatter.string(from: NSNumber(value: card.signupBonus)) ?? "\(card.signupBonus)"
-                            
+                            // Now we use the pre-computed bonusText
                             Text(bonusText + " Points")
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.white)

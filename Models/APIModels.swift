@@ -87,31 +87,30 @@ struct CardDetail: Decodable {
     
     // Convert to our app's model
     func toCreditCardInfo() -> CreditCardInfo {
-        // Get primary category based on highest multiplier
-        let primaryCategory = getPrimaryCategory()
-        
-        // Format description combining signup bonus and primary earn category
-        let description = formatDescription()
-        
-        // Parse signup bonus amount
-        let bonusAmount = Int(signupBonusAmount) ?? 0
-        
-        // Format APR (not provided in this API, we'll use a placeholder)
-        let aprText = "See issuer website for details"
-        
-        return CreditCardInfo(
-            id: cardKey,
-            name: cardName.replacingOccurrences(of: "®", with: "").replacingOccurrences(of: "℠", with: ""),
-            issuer: cardIssuer,
-            category: primaryCategory,
-            description: description,
-            annualFee: Double(annualFee),
-            signupBonus: bonusAmount,
-            regularAPR: aprText,
-            imageName: "", // No image URL in response, would need a mapping
-            applyURL: cardUrl
-        )
-    }
+        let primaryCategory = CreditCardService.shared.getCategoryFromDetail(self)
+            
+            // Format description combining signup bonus and primary earn category
+            let description = formatDescription()
+            
+            // Parse signup bonus amount
+            let bonusAmount = Int(signupBonusAmount) ?? 0
+            
+            // Format APR (not provided in this API, we'll use a placeholder)
+            let aprText = "See issuer website for details"
+            
+            return CreditCardInfo(
+                id: cardKey,
+                name: cardName.replacingOccurrences(of: "®", with: "").replacingOccurrences(of: "℠", with: ""),
+                issuer: cardIssuer,
+                category: primaryCategory,
+                description: description,
+                annualFee: Double(annualFee),
+                signupBonus: bonusAmount,
+                regularAPR: aprText,
+                imageName: "", // No image URL in response, would need a mapping
+                applyURL: cardUrl
+            )
+        }
     
     // Helper to determine primary category
     private func getPrimaryCategory() -> String {
@@ -157,7 +156,7 @@ struct CardDetail: Decodable {
 }
 
 // Card benefit model
-struct CardBenefit: Decodable {
+struct CardBenefit: Codable {
     let benefitTitle: String
     let benefitDesc: String
 }

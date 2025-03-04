@@ -115,9 +115,9 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
         signupBonusLength = try container.decodeIfPresent(Int.self, forKey: .signupBonusLength)
         signupBonusLengthPeriod = try container.decodeIfPresent(String.self, forKey: .signupBonusLengthPeriod)
         
-        // Decode the properties with private backing storage
-        _benefits = try container.decodeIfPresent([CardBenefit].self, forKey: ._benefits)
-        _bonusCategories = try container.decodeIfPresent([SpendBonusCategory].self, forKey: ._bonusCategories)
+        // Decode the properties with private backing storage - FIXED
+        _benefits = try container.decodeIfPresent([CardBenefit].self, forKey: CodingKeys._benefits)
+        _bonusCategories = try container.decodeIfPresent([SpendBonusCategory].self, forKey: CodingKeys._bonusCategories)
         
         annualSpendBonuses = try container.decodeIfPresent([String].self, forKey: .annualSpendBonuses)
         hasLoungeAccess = try container.decodeIfPresent(Bool.self, forKey: .hasLoungeAccess)
@@ -154,9 +154,9 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
         try container.encodeIfPresent(signupBonusLength, forKey: .signupBonusLength)
         try container.encodeIfPresent(signupBonusLengthPeriod, forKey: .signupBonusLengthPeriod)
         
-        // Encode the properties with private backing storage
-        try container.encodeIfPresent(_benefits, forKey: ._benefits)
-        try container.encodeIfPresent(_bonusCategories, forKey: ._bonusCategories)
+        // Encode the properties with private backing storage - FIXED
+        try container.encodeIfPresent(_benefits, forKey: CodingKeys._benefits)
+        try container.encodeIfPresent(_bonusCategories, forKey: CodingKeys._bonusCategories)
         
         try container.encodeIfPresent(annualSpendBonuses, forKey: .annualSpendBonuses)
         try container.encodeIfPresent(hasLoungeAccess, forKey: .hasLoungeAccess)
@@ -187,6 +187,7 @@ struct CreditCardInfo: Codable, Identifiable, Hashable {
     // Helper method to update with detailed information
     mutating func updateWithDetails(from cardDetail: CardDetail) {
         // Update basic fields if they were placeholders
+        category = CreditCardService.shared.getCategoryFromDetail(cardDetail)
         name = cardDetail.cardName.replacingOccurrences(of: "®", with: "").replacingOccurrences(of: "℠", with: "")
         issuer = cardDetail.cardIssuer
         description = cardDetail.signupBonusDesc

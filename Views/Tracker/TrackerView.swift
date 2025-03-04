@@ -10,12 +10,6 @@ import SwiftUI
 import Foundation
 import Combine
 
-//
-//  TrackerView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-
 struct TrackerView: View {
     @ObservedObject var viewModel: CardViewModel
     @State private var showingAddCard = false
@@ -35,34 +29,27 @@ struct TrackerView: View {
                 // Main content wrapped in ScrollView
                 ScrollView {
                     VStack(spacing: 0) {
-                       
-                        // Debug section only appears in debug builds
-                        
-                            
-                            // Add Card Search API test button
-                        
-                          
-                        
-                        
-                        // Dashboard summary
+                        // Dashboard summary with refined styling
                         DashboardView(viewModel: viewModel)
                             .padding(.horizontal)
-                            .padding(.top, 8)
-                            .padding(.bottom, 12)
-                        
-                        // Add Detailed Stats (only show if there are cards)
-                        if !viewModel.cards.isEmpty {
-                            DetailedStatsView(viewModel: viewModel)
-                                .padding(.horizontal)
-                                .padding(.bottom, 12)
-                        }
                         
                         // Section header for cards
                         HStack {
                             Text("Your Cards")
-                                .font(.headline)
+                                .font(.system(.title3, design: .rounded))
+                                .fontWeight(.bold)
                                 .foregroundColor(.primary)
+                            
                             Spacer()
+                            
+                            // Hint text to make it obvious cards are tappable
+                            Text("Tap for details")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(8)
                         }
                         .padding(.horizontal)
                         .padding(.top, 8)
@@ -106,20 +93,30 @@ struct TrackerView: View {
                             // Card list
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.cards) { card in
-                                    ZStack {
+                                    NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
                                         CardRowView(card: card, viewModel: viewModel)
-                                            .contentShape(Rectangle())
-                                        
-                                        NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
-                                            EmptyView()
-                                        }
-                                        .opacity(0)
+                                            .overlay(
+                                                HStack {
+                                                    Spacer()
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                        .foregroundColor(.secondary.opacity(0.6))
+                                                        .padding(.trailing, 16)
+                                                }
+                                            )
                                     }
+                                    .buttonStyle(CardButtonStyle())
                                 }
                                 .onDelete(perform: viewModel.deleteCard)
                             }
                             .padding(.horizontal)
                             .padding(.bottom, 20) // Add padding at bottom to ensure last card isn't cut off
+                            
+                            // Add Detailed Stats (only if we have cards)
+                            DetailedStatsView(viewModel: viewModel)
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                                .padding(.bottom, 16)
                         }
                     }
                     .padding(.top) // Add some padding at the top of the entire content
@@ -233,6 +230,16 @@ struct TrackerView: View {
                 apiTestResult += "\nImage API Error: \(error.localizedDescription)"
             }
         }
+    }
+}
+
+// Custom button style for card interactions
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

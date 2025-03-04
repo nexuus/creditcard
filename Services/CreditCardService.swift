@@ -794,19 +794,29 @@ class CreditCardService {
     // MARK: - Helper Methods
     
     // Helper function to categorize based on description
+    // Replace the existing getCategoryFromDescription method
     private func getCategoryFromDescription(_ description: String) -> String {
         let lowercased = description.lowercased()
         
+        // Try to infer category from description
         if lowercased.contains("groceries") || lowercased.contains("supermarket") {
             return "Groceries"
         } else if lowercased.contains("dining") || lowercased.contains("restaurant") {
             return "Dining"
-        } else if lowercased.contains("travel") || lowercased.contains("airline") || lowercased.contains("hotel") {
+        } else if lowercased.contains("travel") || lowercased.contains("flight") || lowercased.contains("hotel") {
             return "Travel"
-        } else if lowercased.contains("gas") {
+        } else if lowercased.contains("airline") || lowercased.contains("flight") {
+            return "Airline"
+        } else if lowercased.contains("hotel") || lowercased.contains("resort") {
+            return "Hotel"
+        } else if lowercased.contains("gas") || lowercased.contains("fuel") {
             return "Gas"
-        } else {
+        } else if lowercased.contains("cash") || lowercased.contains("back") {
             return "Cashback"
+        } else if lowercased.contains("business") {
+            return "Business"
+        } else {
+            return "General"
         }
     }
     
@@ -847,6 +857,9 @@ class CreditCardService {
         }
     }
     
+    
+    
+    
     // Sample data for fallback
     private func getSampleCreditCardData() -> [CreditCardInfo] {
         return [
@@ -875,5 +888,92 @@ class CreditCardService {
                 applyURL: "https://www.americanexpress.com/us/credit-cards/card/gold-card/"
             )
         ]
+    }
+}
+
+// Extension for improved categorization
+extension CreditCardService {
+    // Standardize categories to a common set
+    func standardizeCardCategory(_ category: String) -> String {
+        let lowerCategory = category.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Map to standard categories
+        if lowerCategory.contains("travel") || lowerCategory.contains("point") {
+            return "Travel"
+        } else if lowerCategory.contains("cash") || lowerCategory.contains("back") {
+            return "Cashback"
+        } else if lowerCategory.contains("hotel") || lowerCategory.contains("lodging") {
+            return "Hotel"
+        } else if lowerCategory.contains("airline") || lowerCategory.contains("flight") {
+            return "Airline"
+        } else if lowerCategory.contains("dining") || lowerCategory.contains("restaurant") {
+            return "Dining"
+        } else if lowerCategory.contains("grocer") || lowerCategory.contains("supermarket") {
+            return "Groceries"
+        } else if lowerCategory.contains("gas") || lowerCategory.contains("fuel") {
+            return "Gas"
+        } else if lowerCategory.contains("business") {
+            return "Business"
+        } else if lowerCategory.contains("student") || lowerCategory.contains("college") {
+            return "Student"
+        } else {
+            return "General"
+        }
+    }
+    
+    // Enhanced category detection from card details
+    func getCategoryFromDetail(_ cardDetail: CardDetail) -> String {
+        // Start with a default category
+        var category = "General"
+        
+        // Check if we have bonus categories
+        if !cardDetail.spendBonusCategory.isEmpty {
+            // Get the category with the highest multiplier
+            if let highest = cardDetail.spendBonusCategory.max(by: { $0.earnMultiplier < $1.earnMultiplier }) {
+                let bonusCategory = highest.spendBonusCategoryGroup
+                
+                // If the highest bonus category is significant, use it
+                if highest.earnMultiplier >= 3.0 {
+                    return standardizeCardCategory(bonusCategory)
+                }
+                
+                // Otherwise, consider it but keep checking
+                category = standardizeCardCategory(bonusCategory)
+            }
+        }
+        
+        // Check the sign-up bonus category
+        if !cardDetail.signupBonusCategory.isEmpty {
+            let signupCategory = cardDetail.signupBonusCategory
+            
+            // If it's a travel-related signup bonus, prioritize that
+            if signupCategory.lowercased().contains("travel") ||
+               signupCategory.lowercased().contains("hotel") ||
+               signupCategory.lowercased().contains("airline") {
+                return standardizeCardCategory(signupCategory)
+            }
+        }
+        
+        // Look for key features in the benefits
+        for benefit in cardDetail.benefit {
+            let benefitDesc = benefit.benefitDesc.lowercased()
+            
+            if benefitDesc.contains("travel credit") ||
+               benefitDesc.contains("hotel credit") ||
+               benefitDesc.contains("lounge access") {
+                return "Travel"
+            }
+            
+            if benefitDesc.contains("free night") || benefitDesc.contains("hotel status") {
+                return "Hotel"
+            }
+            
+            if benefitDesc.contains("companion pass") || benefitDesc.contains("free checked bag") {
+                return "Airline"
+            }
+        }
+        
+        // Return the best category we've found
+        return category
     }
 }

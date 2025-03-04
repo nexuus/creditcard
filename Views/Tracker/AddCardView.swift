@@ -170,6 +170,27 @@ struct AddCardView: View {
                     viewModel: viewModel // Pass the viewModel instance here
                 )
             }
+            
+            .onChange(of: selectedCard) { newSelectedCard in
+                if let card = newSelectedCard {
+                    // Auto-fill form fields with selected card data
+                    name = card.name
+                    issuer = card.issuer
+                    signupBonus = String(card.signupBonus)
+                    annualFee = String(format: "%.0f", card.annualFee)
+                    
+                    // Prepare detailed description for notes
+                    var detailedNotes = "Card details:\n"
+                    detailedNotes += "• Category: \(card.category)\n"
+                    detailedNotes += "• Annual Fee: $\(card.annualFee)\n"
+                    detailedNotes += "• Signup Bonus: \(card.signupBonus) points\n"
+                    if !card.description.isEmpty {
+                        detailedNotes += "\nDescription:\n\(card.description)"
+                    }
+                    notes = detailedNotes
+                }
+            }
+            
         }
     }
     

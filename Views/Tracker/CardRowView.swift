@@ -25,39 +25,44 @@ struct CardRowView: View {
     var card: CreditCard
     var viewModel: CardViewModel
     @Environment(\.colorScheme) var colorScheme
-    @State private var isPressed = false
     
     var body: some View {
         VStack(spacing: 0) {
-            // Top color bar representing the card issuer
-            Rectangle()
-                .fill(AppTheme.Colors.issuerColor(for: card.issuer))
-                .frame(height: 8)
-                .clipShape(
-                    RoundedShape(corners: [.topLeft, .topRight], radius: AppTheme.Layout.cardCornerRadius)
-                )
+            // Top color bar representing the card issuer - more vibrant gradient
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    getCardPrimaryColor(for: card.issuer),
+                    getCardSecondaryColor(for: card.issuer)
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 10) // Slightly taller for better visual impact
+            .clipShape(
+                RoundedShape(corners: [.topLeft, .topRight], radius: AppTheme.Layout.cardCornerRadius)
+            )
             
             // Main card content
             HStack(spacing: 16) {
-                // Card logo circle
+                // Card logo circle with modern gradient
                 ZStack {
                     Circle()
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.9),
-                                    AppTheme.Colors.issuerColor(for: card.issuer)
+                                    getCardPrimaryColor(for: card.issuer),
+                                    getCardSecondaryColor(for: card.issuer)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 50, height: 50)
-                        .shadow(color: AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.5),
-                                radius: 4, x: 0, y: 2)
+                        .shadow(color: getCardPrimaryColor(for: card.issuer).opacity(0.4),
+                                radius: 5, x: 0, y: 3)
                     
                     Text(String(card.issuer.prefix(1)))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                 }
                 
@@ -94,10 +99,10 @@ struct CardRowView: View {
                 
                 // Points and status on the right
                 VStack(alignment: .trailing, spacing: 6) {
-                    // Points value
+                    // Points value with more appealing color
                     Text("\(formattedNumber(card.signupBonus))")
-                        .font(AppTheme.Typography.cardPoints)
-                        .foregroundColor(AppTheme.Colors.primary)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(getCardPrimaryColor(for: card.issuer))
                     
                     // Status button
                     Button(action: {
@@ -119,12 +124,12 @@ struct CardRowView: View {
                         .background(
                             Capsule()
                                 .fill(card.bonusAchieved
-                                      ? AppTheme.Colors.secondary.opacity(0.15)
-                                      : AppTheme.Colors.accent.opacity(0.15))
+                                      ? Color.green.opacity(0.15)
+                                      : Color.orange.opacity(0.15))
                         )
                         .foregroundColor(card.bonusAchieved
-                                         ? AppTheme.Colors.secondary
-                                         : AppTheme.Colors.accent)
+                                         ? Color.green
+                                         : Color.orange)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -133,29 +138,20 @@ struct CardRowView: View {
             .padding(.vertical, 12)
             .background(colorScheme == .dark ? Color(.systemGray6) : Color.white)
         }
-        // Full card container with shadow
+        // Full card container with enhanced shadow and slight border
         .background(colorScheme == .dark ? Color(.systemGray6) : Color.white)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius))
         .shadow(
-            color: Color.black.opacity(0.07),
-            radius: 8,
+            color: Color.black.opacity(0.08),
+            radius: 10,
             x: 0,
-            y: isPressed ? 2 : 4
+            y: 5
         )
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(AppTheme.Animations.quick, value: isPressed)
-        .onTapGesture {
-            withAnimation {
-                isPressed = true
-                
-                // Reset after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    withAnimation {
-                        isPressed = false
-                    }
-                }
-            }
-        }
+        .contentShape(Rectangle()) // Makes the entire card tappable
     }
     
     // Format large numbers with commas
@@ -163,6 +159,53 @@ struct CardRowView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    // MARK: - Helper Methods for Card Colors
+    
+    // Get a vibrant primary color based on issuer
+    func getCardPrimaryColor(for issuer: String) -> Color {
+        switch issuer.lowercased() {
+        case "chase":
+            return Color(red: 0.0, green: 0.45, blue: 0.94) // Vibrant blue
+        case "american express", "amex":
+            return Color(red: 0.13, green: 0.59, blue: 0.95) // Bright blue
+        case "citi":
+            return Color(red: 0.85, green: 0.23, blue: 0.23) // Vibrant red
+        case "capital one":
+            return Color(red: 0.98, green: 0.36, blue: 0.0) // Vibrant orange
+        case "discover":
+            return Color(red: 0.96, green: 0.65, blue: 0.14) // Bright yellow-orange
+        case "wells fargo":
+            return Color(red: 0.76, green: 0.06, blue: 0.15) // Deep red
+        case "bank of america":
+            return Color(red: 0.76, green: 0.15, blue: 0.26) // Wine red
+        case "barclays":
+            return Color(red: 0.15, green: 0.67, blue: 0.88) // Sky blue
+        default:
+            // Generate a nice color based on the issuer name
+            let hash = issuer.hash
+            let hue = Double(abs(hash) % 256) / 256.0
+            return Color(hue: hue, saturation: 0.7, brightness: 0.9)
+        }
+    }
+    
+    // Get a complementary secondary color
+    func getCardSecondaryColor(for issuer: String) -> Color {
+        let primary = getCardPrimaryColor(for: issuer)
+        
+        // Extract the primary color components and create a complementary gradient color
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        UIColor(primary).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        // Adjust hue slightly for a nice gradient (not too contrasting)
+        let newHue = fmod(hue + 0.05, 1.0)
+        
+        return Color(hue: Double(newHue), saturation: Double(saturation * 0.9), brightness: Double(brightness * 0.85))
     }
 }
 
@@ -178,25 +221,5 @@ struct RoundedShape: Shape {
             cornerRadii: CGSize(width: radius, height: radius)
         )
         return Path(path.cgPath)
-    }
-}
-
-// Preview provider for development
-struct CardRowView_Previews: PreviewProvider {
-    static var previews: some View {
-        let viewModel = CardViewModel()
-        let dummyCard = CreditCard(
-            name: "Sapphire Preferred",
-            issuer: "Chase",
-            dateOpened: Date().addingTimeInterval(-180*24*3600),
-            signupBonus: 60000,
-            bonusAchieved: true,
-            annualFee: 95,
-            notes: "Met spending requirement in month 2"
-        )
-        
-        CardRowView(card: dummyCard, viewModel: viewModel)
-            .padding()
-            .previewLayout(.sizeThatFits)
     }
 }
