@@ -1,20 +1,10 @@
-//
-//  AccountView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
 
-// Then your own types if needed (usually not necessary since they're in the same module)
-// import MyCustomTypes
-
 struct AccountView: View {
     @Binding var showLoginSheet: Bool
+    @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var showingLogoutAlert = false
     @Environment(\.colorScheme) var colorScheme
     
@@ -64,6 +54,23 @@ struct AccountView: View {
                         
                         // Account options
                         VStack(spacing: 0) {
+                            // Dark Mode Toggle
+                            Toggle(isOn: $isDarkMode) {
+                                HStack {
+                                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                                        .foregroundColor(isDarkMode ? .purple : .orange)
+                                        .frame(width: 24)
+                                    
+                                    Text("Dark Mode")
+                                        .font(.body)
+                                }
+                            }
+                            .padding()
+                            .background(Color.clear)
+                            .contentShape(Rectangle())
+                            
+                            Divider()
+                            
                             NavigationLink(destination: Text("Profile Settings")) {
                                 SettingsRow(icon: "person.fill", title: "Profile Settings")
                             }
@@ -145,6 +152,19 @@ struct AccountView: View {
                                 .cornerRadius(12)
                         }
                         .padding(.top, 16)
+                        
+                        // Dark Mode Toggle for non-logged in users too
+                        Toggle(isOn: $isDarkMode) {
+                            HStack {
+                                Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                                    .foregroundColor(isDarkMode ? .purple : .orange)
+                                
+                                Text("Dark Mode")
+                                    .font(.body)
+                            }
+                        }
+                        .padding(.horizontal, 32)
+                        .padding(.top, 32)
                         
                         Spacer()
                     }

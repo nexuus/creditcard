@@ -213,7 +213,7 @@ struct CardDetailCatalogView: View {
                     ForEach(annualSpendBonuses, id: \.self) { bonusDesc in
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(AppTheme.Colors.secondary)
+                                .foregroundColor(AppTheme.Colors.success)
                                 .font(.system(size: 18))
                                 .frame(width: 24, height: 24)
                             

@@ -1,11 +1,3 @@
-//
-//  DashboardView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
@@ -18,8 +10,8 @@ struct DashboardView: View {
     @Namespace private var animation
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Header - more modern style
+        VStack(spacing: 16) {
+            // Header - more modern style with refresh button
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Your Rewards")
@@ -27,67 +19,58 @@ struct DashboardView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                     
-                    Text("Updated today")
+                    Text(getLastUpdatedText())
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
                 
                 Spacer()
                 
-                // Refresh indicator
-                Button(action: {}) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
-                }
+                // Refresh indicator with loading animation
+                refreshButton(viewModel: viewModel)
             }
             .padding(.horizontal)
             
-            // Summary cards in a horizontal scroll - enhanced design
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    // Total Cards
-                    ModernSummaryCard(
-                        title: "Total Cards",
-                        value: "\(viewModel.cards.count)",
-                        icon: "creditcard.fill",
-                        iconColor: Color.blue
-                    )
-                    
-                    // Earned Points
-                    ModernSummaryCard(
-                        title: "Points Earned",
-                        value: formattedNumber(viewModel.totalPointsEarned()),
-                        icon: "star.fill",
-                        iconColor: Color.green
-                    )
-                    
-                    // Pending Points
-                    ModernSummaryCard(
-                        title: "Points Pending",
-                        value: formattedNumber(viewModel.pendingPoints()),
-                        icon: "hourglass",
-                        iconColor: Color.orange
-                    )
-                    
-                    // Annual Fees
-                    ModernSummaryCard(
-                        title: "Annual Fees",
-                        value: "$\(Int(viewModel.totalAnnualFees()))",
-                        icon: "dollarsign.circle.fill",
-                        iconColor: Color.red
-                    )
-                }
-                .padding(.horizontal)
+            // Summary cards in a 2x2 grid instead of horizontal scroll
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                // Total Cards
+                StatCard(
+                    title: "Total Cards",
+                    value: "\(viewModel.getActiveCards().count)",
+                    icon: "creditcard.fill",
+                    iconColor: .blue
+                )
+                
+                // Earned Points
+                StatCard(
+                    title: "Points Earned",
+                    value: formattedNumber(viewModel.totalPointsEarned()),
+                    icon: "star.fill",
+                    iconColor: .green
+                )
+                
+                // Pending Points
+                StatCard(
+                    title: "Points Pending",
+                    value: formattedNumber(viewModel.pendingPoints()),
+                    icon: "hourglass",
+                    iconColor: .orange
+                )
+                
+                // Annual Fees
+                StatCard(
+                    title: "Annual Fees",
+                    value: "$\(Int(viewModel.totalAnnualFees()))",
+                    icon: "dollarsign.circle.fill",
+                    iconColor: .red
+                )
             }
+            .padding(.horizontal)
             
-            // Recent activity section - completely redesigned for modern iOS look
+            // Recent activity section with modern design
             if viewModel.cards.count > 0 {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Header with toggle button - more iOS 17 style
+                VStack(alignment: .leading, spacing: 12) {
+                    // Header with toggle button
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             isRecentActivityExpanded.toggle()
@@ -97,7 +80,7 @@ struct DashboardView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "clock")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.blue)
                                 
                                 Text("Recent Activity")
                                     .font(.system(.headline, design: .rounded))
@@ -111,96 +94,77 @@ struct DashboardView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.secondary)
                                 .rotationEffect(.degrees(isRecentActivityExpanded ? 90 : 0))
-                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isRecentActivityExpanded)
                                 .padding(6)
                                 .background(Color.secondary.opacity(0.1))
                                 .clipShape(Circle())
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                     
-                    // Content with animated expansion
+                    // Activity content
                     if isRecentActivityExpanded {
-                        VStack(spacing: 12) {
-                            // Most recent card or latest bonus earned
-                            ForEach(getRecentActivities().prefix(2)) { activity in
-                                HStack(spacing: 16) {
-                                    // Modern icon with SF Symbols
-                                    ZStack {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [
-                                                        activity.type == .added ? Color.blue : Color.green,
-                                                        activity.type == .added ? Color.blue.opacity(0.7) : Color.green.opacity(0.7)
-                                                    ]),
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 44, height: 44)
-                                        
-                                        Image(systemName: activity.type == .added ? "creditcard.fill" : "star.fill")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundColor(.white)
-                                    }
-                                    .shadow(color: (activity.type == .added ? Color.blue : Color.green).opacity(0.3), radius: 4, x: 0, y: 2)
-                                    
-                                    // Activity details with improved typography
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(activity.title)
-                                            .font(.system(.subheadline, design: .rounded))
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                        
-                                        Text(activity.subtitle)
-                                            .font(.system(.caption, design: .rounded))
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
+                        VStack(spacing: 10) {
+                            let activities = getRecentActivities()
+                            
+                            if activities.isEmpty {
+                                HStack {
                                     Spacer()
-                                    
-                                    // Date or points with badge style
-                                    Text(activity.valueText)
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule()
-                                                .fill(activity.type == .added ? Color.blue : Color.green)
-                                        )
+                                    Text("No recent activity")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .padding()
+                                    Spacer()
                                 }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                                )
-                                .padding(.horizontal, 16)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                                .id("activity-\(activity.id)")
+                            } else {
+                                ForEach(activities.prefix(3)) { activity in
+                                    ActivityRow(activity: activity)
+                                }
                             }
                         }
-                        .padding(.bottom, 16)
-                        .transition(.opacity)
-                        .matchedGeometryEffect(id: "activities", in: animation)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Material.thin)
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
+                .padding(.horizontal)
             }
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 8)
+    }
+    
+    // Refresh button with loading state
+    @ViewBuilder
+    func refreshButton(viewModel: CardViewModel) -> some View {
+        Button(action: {
+            Task {
+                // Trigger refresh of all data
+                await viewModel.refreshAllData()
+            }
+        }) {
+            Image(systemName: viewModel.isLoadingCards ? "arrow.triangle.2.circlepath.circle" : "arrow.triangle.2.circlepath")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(viewModel.isLoadingCards ? .gray : .secondary)
+                .padding(8)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(Circle())
+                .rotationEffect(Angle(degrees: viewModel.isLoadingCards ? 360 : 0))
+                .animation(viewModel.isLoadingCards ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isLoadingCards)
+        }
+        .disabled(viewModel.isLoadingCards)
+    }
+    
+    // Get last updated text
+    private func getLastUpdatedText() -> String {
+        let lastUpdated = UserDefaults.standard.object(forKey: "lastDataUpdate") as? Date ?? Date()
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return "Updated \(formatter.localizedString(for: lastUpdated, relativeTo: Date()))"
     }
     
     // MARK: - Helper Methods
@@ -213,20 +177,21 @@ struct DashboardView: View {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
     
-    // Format date
-    func formattedDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+    // Activity types
+    enum ActivityType: Identifiable {
+        case added(CreditCard)
+        case earned(CreditCard)
+        case inactivated(CreditCard)
+        
+        var id: UUID {
+            switch self {
+            case .added(let card), .earned(let card), .inactivated(let card):
+                return card.id
+            }
+        }
     }
     
-    // Activity types for the dashboard
-    enum ActivityType {
-        case added
-        case earned
-    }
-    
-    // Activity model for the dashboard
+    // Activity model
     struct Activity: Identifiable {
         let id = UUID()
         let title: String
@@ -239,103 +204,199 @@ struct DashboardView: View {
     func getRecentActivities() -> [Activity] {
         var activities = [Activity]()
         
-        // Sort cards by date opened (most recent first)
+        // Sort all cards by date opened (most recent first)
         let sortedCards = viewModel.cards.sorted { $0.dateOpened > $1.dateOpened }
         
-        // Add most recently added card
-        if let recentCard = sortedCards.first {
+        // Get recently added cards (last 30 days)
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let recentlyAdded = sortedCards.filter { $0.dateOpened > thirtyDaysAgo }
+        
+        for card in recentlyAdded.prefix(2) {
             activities.append(
                 Activity(
                     title: "Added New Card",
-                    subtitle: "\(recentCard.name) by \(recentCard.issuer)",
-                    valueText: formattedDate(recentCard.dateOpened),
-                    type: .added
+                    subtitle: "\(card.name) by \(card.issuer)",
+                    valueText: formattedDate(card.dateOpened),
+                    type: .added(card)
                 )
             )
         }
         
-        // Add most recently achieved bonus
+        // Get recently achieved bonuses (cards with achieved bonus, sorted by most recent first)
         let achievedCards = sortedCards.filter { $0.bonusAchieved }
-        if let recentAchieved = achievedCards.first {
+        
+        for card in achievedCards.prefix(2) {
             activities.append(
                 Activity(
                     title: "Earned Bonus",
-                    subtitle: "\(recentAchieved.name) by \(recentAchieved.issuer)",
-                    valueText: "+\(formattedNumber(recentAchieved.signupBonus))",
-                    type: .earned
+                    subtitle: "\(card.name) by \(card.issuer)",
+                    valueText: "+\(formattedNumber(card.signupBonus))",
+                    type: .earned(card)
                 )
             )
         }
         
-        return activities
+        // Get recently inactivated cards
+        let inactiveCards = viewModel.getInactiveCards()
+            .filter { $0.dateInactivated != nil }
+            .sorted { ($0.dateInactivated ?? Date()) > ($1.dateInactivated ?? Date()) }
+        
+        for card in inactiveCards.prefix(2) {
+            activities.append(
+                Activity(
+                    title: "Card Inactivated",
+                    subtitle: "\(card.name) by \(card.issuer)",
+                    valueText: formattedDate(card.dateInactivated ?? Date()),
+                    type: .inactivated(card)
+                )
+            )
+        }
+        
+        // Sort by most recent first (approximating dates based on activity type)
+        return activities.sorted { activity1, activity2 in
+            let date1: Date
+            let date2: Date
+            
+            switch activity1.type {
+            case .added(let card):
+                date1 = card.dateOpened
+            case .earned(let card):
+                date1 = card.dateOpened
+            case .inactivated(let card):
+                date1 = card.dateInactivated ?? Date.distantPast
+            }
+            
+            switch activity2.type {
+            case .added(let card):
+                date2 = card.dateOpened
+            case .earned(let card):
+                date2 = card.dateOpened
+            case .inactivated(let card):
+                date2 = card.dateInactivated ?? Date.distantPast
+            }
+            
+            return date1 > date2
+        }
+    }
+    
+    // Format relative date
+    func formattedDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
-// Modern iOS 17-style summary card component
-struct ModernSummaryCard: View {
+// Stat card for the dashboard grid
+struct StatCard: View {
     var title: String
     var value: String
     var icon: String
     var iconColor: Color
     @Environment(\.colorScheme) var colorScheme
-    @State private var isPressed = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Top row with icon and value
-            HStack(alignment: .center, spacing: 12) {
-                // Beautiful SF Symbol with gradient
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [iconColor, iconColor.opacity(0.7)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .shadow(color: iconColor.opacity(0.3), radius: 4, x: 0, y: 2)
+        VStack(spacing: 12) {
+            // Icon in circle
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 40, height: 40)
                 
-                // Value with large text
-                Text(value)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                    .foregroundColor(.primary)
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(iconColor)
             }
             
-            // Title with better contrast
+            // Value with responsive text size
+            Text(value)
+                .font(.system(size: value.count > 6 ? 16 : 18, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .foregroundColor(.primary)
+            
+            // Title
             Text(title)
-                .font(.system(.subheadline, design: .rounded))
-                .fontWeight(.medium)
+                .font(.caption)
                 .foregroundColor(.secondary)
+                .lineLimit(1)
         }
-        .frame(width: 150)
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+        .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Material.regular)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
+                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-        )
-        .scaleEffect(isPressed ? 0.96 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        // Add haptic touch effect
-        .onLongPressGesture(minimumDuration: .infinity, maximumDistance: 50, pressing: { pressing in
-            isPressed = pressing
-            if pressing {
-                let impactGenerator = UIImpactFeedbackGenerator(style: .medium)
-                impactGenerator.impactOccurred()
+    }
+}
+
+// Activity row for recent activities
+struct ActivityRow: View {
+    var activity: DashboardView.Activity
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: iconName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(iconColor)
             }
-        }, perform: {})
+            
+            // Details
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activity.title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text(activity.subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Date or value
+            Text(activity.valueText)
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(iconColor.opacity(0.1))
+                .foregroundColor(iconColor)
+                .cornerRadius(8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+    
+    // Icon based on activity type
+    private var iconName: String {
+        switch activity.type {
+        case .added:
+            return "creditcard.fill"
+        case .earned:
+            return "star.fill"
+        case .inactivated:
+            return "xmark.circle.fill"
+        }
+    }
+    
+    // Color based on activity type
+    private var iconColor: Color {
+        switch activity.type {
+        case .added:
+            return .blue
+        case .earned:
+            return .green
+        case .inactivated:
+            return .orange
+        }
     }
 }

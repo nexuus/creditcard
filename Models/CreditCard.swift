@@ -1,17 +1,6 @@
-//
-//  CreditCard.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
-
-// Then your own types if needed (usually not necessary since they're in the same module)
-// import MyCustomTypes
 
 struct CreditCard: Identifiable, Codable {
     var id = UUID()
@@ -22,6 +11,9 @@ struct CreditCard: Identifiable, Codable {
     var bonusAchieved: Bool
     var annualFee: Double
     var notes: String
+    var isActive: Bool = true
+    var dateInactivated: Date? = nil
+    
     var cardColor: Color {
         switch issuer.lowercased() {
         case "chase": return Color.blue

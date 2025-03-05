@@ -1,29 +1,12 @@
-//
-//  MainAppView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
-
-// Then your own types if needed (usually not necessary since they're in the same module)
-// import MyCustomTypes
-
-//
-//  MainAppView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
 
 struct MainAppView: View {
     @ObservedObject var viewModel: CardViewModel
     @State private var selectedTab = 0
     @State private var showingLoginSheet = false
+    @AppStorage("isDarkMode") private var isDarkMode = false
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -54,6 +37,7 @@ struct MainAppView: View {
                 LoginView(isPresented: $showingLoginSheet)
             }
         }
+        .preferredColorScheme(isDarkMode ? .dark : .light)
     }
 }
 

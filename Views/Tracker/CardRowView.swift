@@ -1,25 +1,6 @@
-//
-//  CardRowView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
-
-// Then your own types if needed (usually not necessary since they're in the same module)
-// import MyCustomTypes
-
-//
-//  CardRowView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
 
 struct CardRowView: View {
     var card: CreditCard
@@ -28,7 +9,7 @@ struct CardRowView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Top color bar representing the card issuer - more vibrant gradient
+            // Top color bar representing the card issuer
             LinearGradient(
                 gradient: Gradient(colors: [
                     getCardPrimaryColor(for: card.issuer),
@@ -37,14 +18,15 @@ struct CardRowView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(height: 10) // Slightly taller for better visual impact
+            .frame(height: 10)
             .clipShape(
-                RoundedShape(corners: [.topLeft, .topRight], radius: AppTheme.Layout.cardCornerRadius)
+                RoundedShape(corners: [.topLeft, .topRight], radius: 16)
             )
+            .opacity(card.isActive ? 1.0 : 0.5) // Dim for inactive cards
             
             // Main card content
             HStack(spacing: 16) {
-                // Card logo circle with modern gradient
+                // Card logo circle
                 ZStack {
                     Circle()
                         .fill(
@@ -60,6 +42,7 @@ struct CardRowView: View {
                         .frame(width: 50, height: 50)
                         .shadow(color: getCardPrimaryColor(for: card.issuer).opacity(0.4),
                                 radius: 5, x: 0, y: 3)
+                        .opacity(card.isActive ? 1.0 : 0.5) // Dim for inactive cards
                     
                     Text(String(card.issuer.prefix(1)))
                         .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -68,85 +51,127 @@ struct CardRowView: View {
                 
                 // Card details
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(card.name)
-                        .font(AppTheme.Typography.cardTitle)
-                        .foregroundColor(AppTheme.Colors.text)
+                    HStack(alignment: .center, spacing: 6) {
+                        Text(card.name)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                        
+                        // Inactive badge
+                        if !card.isActive {
+                            Text("Inactive")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .cornerRadius(4)
+                        }
+                    }
                     
                     Text(card.issuer)
-                        .font(AppTheme.Typography.cardIssuer)
-                        .foregroundColor(AppTheme.Colors.secondaryText)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
                     
-                    // Card metrics in a horizontal stack
-                    HStack(spacing: 12) {
+                    // Card metrics in a horizontal stack with tighter spacing
+                    HStack(spacing: 8) {
                         // Annual fee
                         Label(
                             title: { Text("$\(Int(card.annualFee))").font(.caption).bold() },
                             icon: { Image(systemName: "dollarsign.circle.fill").foregroundColor(.gray) }
                         )
-                        .foregroundColor(AppTheme.Colors.tertiaryText)
+                        .foregroundColor(.secondary)
                         
-                        // Points
-                        Label(
-                            title: { Text("\(formattedNumber(card.signupBonus))").font(.caption).bold() },
-                            icon: { Image(systemName: "star.fill").foregroundColor(.yellow) }
-                        )
-                        .foregroundColor(AppTheme.Colors.tertiaryText)
+                        // Points - moved closer together
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.yellow)
+                                .font(.system(size: 12))
+                            
+                            Text("\(formattedNumber(card.signupBonus))")
+                                .font(.caption)
+                                .bold()
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding(.top, 4)
+                    
+                    // Show date inactivated if applicable
+                    if !card.isActive, let dateInactivated = card.dateInactivated {
+                        Text("Since \(formattedDate(dateInactivated))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+                    }
                 }
                 
                 Spacer()
                 
-                // Points and status on the right
+                // Right side elements
                 VStack(alignment: .trailing, spacing: 6) {
                     // Points value with more appealing color
                     Text("\(formattedNumber(card.signupBonus))")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(getCardPrimaryColor(for: card.issuer))
+                        .opacity(card.isActive ? 1.0 : 0.6) // Dim for inactive cards
                     
                     // Status button
-                    Button(action: {
-                        withAnimation(.spring()) {
-                            viewModel.toggleBonusAchieved(for: card.id)
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
+                    if card.isActive {
+                        Button(action: {
+                            withAnimation(.spring()) {
+                                var updatedCard = card
+                                updatedCard.bonusAchieved.toggle()
+                                viewModel.updateCard(updatedCard)
+                                
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Text(card.bonusAchieved ? "Earned" : "Pending")
+                                    .font(.system(size: 12, weight: .semibold))
+                                
+                                Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 12))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(card.bonusAchieved
+                                          ? Color.green.opacity(0.15)
+                                          : Color.orange.opacity(0.15))
+                            )
+                            .foregroundColor(card.bonusAchieved
+                                             ? Color.green
+                                             : Color.orange)
                         }
-                    }) {
-                        HStack(spacing: 4) {
-                            Text(card.bonusAchieved ? "Earned" : "Pending")
-                                .font(.system(size: 12, weight: .semibold))
-                            
-                            Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 12))
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        // For inactive cards, show when it was inactivated
+                        if let dateInactivated = card.dateInactivated {
+                            Text(timeAgo(from: dateInactivated))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(card.bonusAchieved
-                                      ? Color.green.opacity(0.15)
-                                      : Color.orange.opacity(0.15))
-                        )
-                        .foregroundColor(card.bonusAchieved
-                                         ? Color.green
-                                         : Color.orange)
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(colorScheme == .dark ? Color(.systemGray6) : Color.white)
+            .opacity(card.isActive ? 1.0 : 0.8) // Slightly dim inactive cards
         }
         // Full card container with enhanced shadow and slight border
         .background(colorScheme == .dark ? Color(.systemGray6) : Color.white)
         .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(
-            color: Color.black.opacity(0.08),
+            color: Color.black.opacity(card.isActive ? 0.08 : 0.04),
             radius: 10,
             x: 0,
             y: 5
@@ -161,9 +186,22 @@ struct CardRowView: View {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
     
-    // MARK: - Helper Methods for Card Colors
+    // Format date
+    func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
     
-    // Get a vibrant primary color based on issuer
+    // Time ago string
+    func timeAgo(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
+    // Get vibrant primary color based on issuer
     func getCardPrimaryColor(for issuer: String) -> Color {
         switch issuer.lowercased() {
         case "chase":
@@ -183,7 +221,6 @@ struct CardRowView: View {
         case "barclays":
             return Color(red: 0.15, green: 0.67, blue: 0.88) // Sky blue
         default:
-            // Generate a nice color based on the issuer name
             let hash = issuer.hash
             let hue = Double(abs(hash) % 256) / 256.0
             return Color(hue: hue, saturation: 0.7, brightness: 0.9)

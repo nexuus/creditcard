@@ -1,10 +1,3 @@
-//
-//  DetailedStatsView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
 import SwiftUI
 
 struct DetailedStatsView: View {
@@ -27,25 +20,25 @@ struct DetailedStatsView: View {
                     .foregroundColor(.secondary)
             }
             
-            // Lifetime points
+            // Lifetime points - always includes ALL cards (active and inactive)
             statRow(
                 title: "Lifetime Points",
-                value: formattedNumber(viewModel.lifetimePoints()),
+                value: formattedNumber(viewModel.totalHistoricalPoints()),
                 icon: "star.circle.fill",
                 color: .purple,
                 section: "lifetime"
             )
             
-            // Annual fees
+            // Annual fees - only active cards
             statRow(
-                title: "Total Annual Fees",
+                title: "Active Annual Fees",
                 value: "$\(String(format: "%.2f", viewModel.totalAnnualFees()))",
                 icon: "dollarsign.circle.fill",
                 color: .red,
                 section: "fees"
             )
             
-            // Points by year
+            // Points by year - use historical points to include all cards
             statRow(
                 title: "Points by Year",
                 value: "\(viewModel.pointsByYear().count) years",
@@ -58,7 +51,7 @@ struct DetailedStatsView: View {
                 pointsByYearDetail
             }
             
-            // Cards by year
+            // Cards by year - show all cards
             statRow(
                 title: "Cards Opened by Year",
                 value: "\(viewModel.cardsOpenedByYear().count) years",

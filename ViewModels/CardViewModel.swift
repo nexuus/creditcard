@@ -65,13 +65,26 @@ class CardViewModel: ObservableObject {
     
     // MARK: - User Card Management
     
-    func loadUserCards() {
-        if let user = UserService.shared.currentUser {
-            self.cards = user.cards
-        } else {
-            loadSampleData()
+    
+    func updateCard(_ card: CreditCard) {
+            if let index = cards.firstIndex(where: { $0.id == card.id }) {
+                cards[index] = card
+                saveCards()
+                // Force UI refresh
+                objectWillChange.send()
+            }
         }
-    }
+        
+        // Get active cards only
+        func getActiveCards() -> [CreditCard] {
+            return cards.filter { $0.isActive }
+        }
+        
+        // Get inactive cards only
+        func getInactiveCards() -> [CreditCard] {
+            return cards.filter { !$0.isActive }
+        }
+    
     
     func loadSampleData() {
         cards = [
@@ -93,8 +106,32 @@ class CardViewModel: ObservableObject {
     
     func toggleBonusAchieved(for cardID: UUID) {
         if let index = cards.firstIndex(where: { $0.id == cardID }) {
+            // Toggle the status
             cards[index].bonusAchieved.toggle()
+            
+            // Save changes immediately
             saveCards()
+            
+            // Optional: Add haptic feedback for better user experience
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            
+            // Log the change for debugging
+            let status = cards[index].bonusAchieved ? "earned" : "pending"
+            let points = cards[index].signupBonus
+            print("💾 Card status changed: \(cards[index].name) marked as \(status) (\(points) points)")
+        }
+    }
+
+    func saveCardsLocally() {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(cards)
+            UserDefaults.standard.set(data, forKey: "savedCards")
+            
+            print("💾 Cards saved locally: \(cards.count) cards")
+        } catch {
+            print("❌ Error saving cards locally: \(error)")
         }
     }
     
@@ -104,49 +141,54 @@ class CardViewModel: ObservableObject {
         }
     }
     
+    
+    func totalHistoricalPoints() -> Int {
+            return cards.filter { $0.bonusAchieved }.reduce(0) { $0 + $1.signupBonus }
+        }
     // MARK: - Points and Statistics
     
     func totalPointsEarned() -> Int {
-        return cards.filter { $0.bonusAchieved }.reduce(0) { $0 + $1.signupBonus }
-    }
+            return cards.filter { $0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
+        }
     
     func pendingPoints() -> Int {
-        return cards.filter { !$0.bonusAchieved }.reduce(0) { $0 + $1.signupBonus }
-    }
+            return cards.filter { !$0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
+        }
     
     func pointsByYear() -> [String: Int] {
-        let calendar = Calendar.current
-        var yearlyPoints: [String: Int] = [:]
-        
-        for card in cards where card.bonusAchieved {
-            let year = calendar.component(.year, from: card.dateOpened)
-            let yearString = String(year)
-            yearlyPoints[yearString, default: 0] += card.signupBonus
+            let calendar = Calendar.current
+            var yearlyPoints: [String: Int] = [:]
+            
+            for card in cards where card.bonusAchieved {
+                let year = calendar.component(.year, from: card.dateOpened)
+                let yearString = String(year)
+                yearlyPoints[yearString, default: 0] += card.signupBonus
+            }
+            
+            return yearlyPoints
         }
         
-        return yearlyPoints
-    }
 
     func lifetimePoints() -> Int {
         return totalPointsEarned()
     }
 
     func totalAnnualFees() -> Double {
-        return cards.reduce(0) { $0 + $1.annualFee }
-    }
+           return cards.filter { $0.isActive }.reduce(0) { $0 + $1.annualFee }
+       }
 
     func cardsOpenedByYear() -> [String: Int] {
-        let calendar = Calendar.current
-        var yearlyCards: [String: Int] = [:]
-        
-        for card in cards {
-            let year = calendar.component(.year, from: card.dateOpened)
-            let yearString = String(year)
-            yearlyCards[yearString, default: 0] += 1
-        }
-        
-        return yearlyCards
-    }
+           let calendar = Calendar.current
+           var yearlyCards: [String: Int] = [:]
+           
+           for card in cards {
+               let year = calendar.component(.year, from: card.dateOpened)
+               let yearString = String(year)
+               yearlyCards[yearString, default: 0] += 1
+           }
+           
+           return yearlyCards
+       }
     
     // MARK: - API Integration
     
@@ -283,17 +325,6 @@ class CardViewModel: ObservableObject {
         
         isLoadingDetails = false
         print("✅ Prefetched details for top popular cards")
-    }
-    
-    // Method to get card details on demand
-    func getCardDetails(for cardId: String) async -> CreditCardInfo? {
-        // Check if we already have a detailed card
-        if let existingCard = availableCreditCards.first(where: { $0.id == cardId && $0.benefits != nil }) {
-            return existingCard
-        }
-        
-        // Otherwise fetch the details
-        return await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: cardId)
     }
     
     func searchCreditCards(searchTerm: String) -> [CreditCardInfo] {
@@ -487,5 +518,108 @@ class CardViewModel: ObservableObject {
                 applyURL: ""
             )
         ]
+    }
+}
+
+extension CardViewModel {
+    // Do NOT redeclare toggleBonusAchieved - instead add these supporting methods
+    
+    // Load cards locally from UserDefaults
+    private func loadCardsLocally() -> [CreditCard]? {
+        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
+            return nil
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let loadedCards = try decoder.decode([CreditCard].self, from: data)
+            
+            print("📤 Loaded \(loadedCards.count) cards from local storage")
+            return loadedCards
+        } catch {
+            print("❌ Error loading cards locally: \(error)")
+            return nil
+        }
+    }
+    
+    // Enhanced load user cards method with fallback to local storage
+    func loadUserCards() {
+        if let user = UserService.shared.currentUser {
+            self.cards = user.cards
+            print("📤 Loaded \(cards.count) cards from user account")
+        } else {
+            // Try to load from local storage if not logged in
+            if let localCards = loadCardsLocally() {
+                self.cards = localCards
+            } else {
+                loadSampleData()
+            }
+        }
+    }
+        // Add a method to force-refresh all data
+        @MainActor
+        func refreshAllData() async {
+            // Show loading indicator
+            isLoadingCards = true
+            
+            // Force refresh from API
+            await loadCreditCardsFromAPI(forceRefresh: true)
+            
+            // Hide loading indicator
+            isLoadingCards = false
+        }
+        
+        // Method to fetch card details with caching
+        @MainActor
+        func getCardDetails(for cardId: String) async -> CreditCardInfo? {
+            // Check if we already have a detailed card
+            if let existingCard = availableCreditCards.first(where: { $0.id == cardId && $0.benefits != nil }) {
+                return existingCard
+            }
+            
+            // Otherwise fetch the details with caching
+            return await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: cardId)
+        }
+    }
+    
+
+extension CardViewModel {
+    // Load cards from API with improved caching
+    @MainActor
+    func loadCreditCardsFromAPI(forceRefresh: Bool = false) async {
+        isLoadingCards = true
+        apiLoadingError = nil
+        
+        do {
+            if forceRefresh {
+                // Clear caches if force refresh is requested
+                print("🔄 Force refreshing card data...")
+                CreditCardService.shared.clearAllCaches()
+            }
+            
+            print("📊 Fetching credit card catalog...")
+            // Use enhanced fetching method with caching
+            availableCreditCards = try await CreditCardService.shared.fetchCreditCards()
+            print("✅ Successfully loaded \(availableCreditCards.count) cards")
+            
+            // Filter out the popular cards
+            filterPopularCards()
+            
+            // Prefetch details for popular cards
+            await prefetchPopularCardDetails()
+        } catch {
+            print("❌ API Error: \(error)")
+            apiLoadingError = "Failed to load credit cards: \(error.localizedDescription)"
+            
+            // If we fail to load cards, check if we have any cached
+            if availableCreditCards.isEmpty {
+                // Fall back to sample data if no cards are available
+                availableCreditCards = CreditCardService.shared.getSampleCreditCardData()
+                popularCreditCards = availableCreditCards // For sample data, use all cards
+                print("⚠️ Using \(availableCreditCards.count) sample cards as fallback")
+            }
+        }
+        
+        isLoadingCards = false
     }
 }

@@ -1,40 +1,47 @@
-//
-//  Apptheme.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-//
-//  AppTheme.swift
-//  CreditCardTracker
-//
-//  Created by Hassan on 2/26/25.
-//
-
 import SwiftUI
 
-// A central place for app design elements
+// An enhanced AppTheme with better dark mode support
 struct AppTheme {
     // MARK: - Colors
     struct Colors {
-        // Main brand colors
-        static let primary = Color(hex: "0A84FF")      // Blue
-        static let secondary = Color(hex: "32D74B")    // Green
-        static let accent = Color(hex: "FF453A")       // Red
+        // Dynamic colors that adapt to dark mode
+        static var primary: Color {
+            Color("AccentColor") // Use the app's accent color asset
+        }
         
-        // Neutral colors
-        static let background = Color(.systemBackground)
-        static let secondaryBackground = Color(.secondarySystemBackground)
-        static let groupedBackground = Color(.systemGroupedBackground)
+        static var background: Color {
+            Color(.systemBackground)
+        }
+        
+        static var secondaryBackground: Color {
+            Color(.secondarySystemBackground)
+        }
+        
+        static var groupedBackground: Color {
+            Color(.systemGroupedBackground)
+        }
+        
+        static var cardBackground: Color {
+            Color(.secondarySystemGroupedBackground)
+        }
         
         // Text colors
-        static let text = Color(.label)
-        static let secondaryText = Color(.secondaryLabel)
-        static let tertiaryText = Color(.tertiaryLabel)
+        static var text: Color {
+            Color(.label)
+        }
+        
+        static var secondaryText: Color {
+            Color(.secondaryLabel)
+        }
+        
+        static var tertiaryText: Color {
+            Color(.tertiaryLabel)
+        }
         
         // Card colors
-        static let cardShadow = Color.black.opacity(0.1)
+        static func cardShadow(for colorScheme: ColorScheme) -> Color {
+            colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.1)
+        }
         
         // Card issuer colors for more vibrant, modern feel
         static func issuerColor(for issuer: String) -> Color {
@@ -85,6 +92,19 @@ struct AppTheme {
                 return Color(hex: "8E8E93")  // Gray
             }
         }
+        
+        // Status colors
+        static var success: Color {
+            Color.green
+        }
+        
+        static var warning: Color {
+            Color.orange
+        }
+        
+        static var error: Color {
+            Color.red
+        }
     }
     
     // MARK: - Typography
@@ -120,6 +140,10 @@ struct AppTheme {
         static let shadowRadius: CGFloat = 10
         static let shadowY: CGFloat = 4
         static let shadowOpacity: CGFloat = 0.1
+        
+        // Padding
+        static let standardPadding: CGFloat = 16
+        static let contentPadding: CGFloat = 20
     }
     
     // MARK: - Animations
@@ -159,11 +183,12 @@ extension Color {
     }
 }
 
-// Style for modern buttons
+// Style for modern buttons with dark mode support
 struct ModernButtonStyle: ButtonStyle {
     var foregroundColor: Color = .white
     var backgroundColor: Color = AppTheme.Colors.primary
     var pressedOpacity: Double = 0.8
+    @Environment(\.colorScheme) var colorScheme
     
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -175,7 +200,7 @@ struct ModernButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
                     .fill(backgroundColor)
                     .shadow(
-                        color: backgroundColor.opacity(0.3),
+                        color: backgroundColor.opacity(colorScheme == .dark ? 0.6 : 0.3),
                         radius: 5, x: 0, y: 2
                     )
             )
@@ -185,18 +210,18 @@ struct ModernButtonStyle: ButtonStyle {
     }
 }
 
-// Modern card style
+// Modern card style with dark mode support
 struct ModernCardStyle: ViewModifier {
-    var backgroundColor: Color = Color(.systemBackground)
+    @Environment(\.colorScheme) var colorScheme
     
     func body(content: Content) -> some View {
         content
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                    .fill(backgroundColor)
+                    .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
                     .shadow(
-                        color: AppTheme.Colors.cardShadow,
+                        color: AppTheme.Colors.cardShadow(for: colorScheme),
                         radius: AppTheme.Layout.shadowRadius,
                         x: 0, y: AppTheme.Layout.shadowY
                     )
@@ -206,12 +231,12 @@ struct ModernCardStyle: ViewModifier {
 
 // Extension to apply the modern card style
 extension View {
-    func modernCard(backgroundColor: Color = Color(.systemBackground)) -> some View {
-        self.modifier(ModernCardStyle(backgroundColor: backgroundColor))
+    func modernCard() -> some View {
+        self.modifier(ModernCardStyle())
     }
 }
 
-// Modern text field style
+// Modern text field style with dark mode support
 struct ModernTextFieldStyle: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     
@@ -221,7 +246,8 @@ struct ModernTextFieldStyle: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                    .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
+                    .shadow(color: colorScheme == .dark ? Color.black.opacity(0.1) : Color.black.opacity(0.05),
+                            radius: 3, x: 0, y: 1)
             )
     }
 }

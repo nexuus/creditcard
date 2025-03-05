@@ -1,36 +1,51 @@
-//
-//  CardDetailView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
 
-//
-//  CardDetailView.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-
 struct CardDetailView: View {
-    var card: CreditCard
     @ObservedObject var viewModel: CardViewModel
+    @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
-    @State private var isRotated = false
     
+    // State for the card display and alerts
+    let initialCard: CreditCard
+    @State private var card: CreditCard
+    @State private var isRotated = false
+    @State private var showingInactivateAlert = false
+    @State private var showingReactivateAlert = false
+    
+    // Date formatter
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter
     }()
     
+    // Initialize with card and viewModel
+    init(card: CreditCard, viewModel: CardViewModel) {
+        self.viewModel = viewModel
+        self.initialCard = card
+        self._card = State(initialValue: card)
+    }
+    
     var body: some View {
         ScrollView {
-            VStack(spacing: AppTheme.Layout.spacing) {
+            VStack(spacing: 16) {
+                // Status indicator for inactive cards
+                if !card.isActive {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("This card is inactive as of \(dateFormatter.string(from: card.dateInactivated ?? Date()))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+                }
+                
                 // 3D credit card visualization
                 ZStack {
                     // Card visualization
@@ -47,15 +62,16 @@ struct CardDetailView: View {
                                     isRotated.toggle()
                                 }
                             }
+                            .opacity(card.isActive ? 1.0 : 0.7) // Dim inactive cards
                         
                         // Flip hint
                         Text("Tap card to flip")
                             .font(.caption)
-                            .foregroundColor(AppTheme.Colors.tertiaryText)
+                            .foregroundColor(.secondary)
                             .padding(.top, 8)
                     }
                 }
-                .padding(.vertical, 16)
+                .padding(.top, 16)
                 
                 // Quick stats
                 HStack(spacing: 20) {
@@ -85,18 +101,19 @@ struct CardDetailView: View {
                 // Status section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Bonus Status")
-                        .font(AppTheme.Typography.headline)
-                        .foregroundColor(AppTheme.Colors.text)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
                     
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(card.bonusAchieved ? "Bonus Achieved" : "Bonus Pending")
                                 .font(.headline)
-                                .foregroundColor(card.bonusAchieved ? AppTheme.Colors.secondary : .orange)
+                                .foregroundColor(card.bonusAchieved ? .green : .orange)
                             
                             Text(card.bonusAchieved ? "You've earned these points!" : "Still working toward this bonus")
                                 .font(.subheadline)
-                                .foregroundColor(AppTheme.Colors.secondaryText)
+                                .foregroundColor(.secondary)
                         }
                         
                         Spacer()
@@ -104,7 +121,7 @@ struct CardDetailView: View {
                         // Modern toggle switch
                         ZStack {
                             Capsule()
-                                .fill(card.bonusAchieved ? AppTheme.Colors.secondary : Color.gray.opacity(0.3))
+                                .fill(card.bonusAchieved ? Color.green : Color.gray.opacity(0.3))
                                 .frame(width: 50, height: 30)
                             
                             Circle()
@@ -113,65 +130,92 @@ struct CardDetailView: View {
                                 .frame(width: 26, height: 26)
                                 .offset(x: card.bonusAchieved ? 10 : -10)
                         }
-                        .animation(AppTheme.Animations.standard, value: card.bonusAchieved)
+                        .animation(.spring(), value: card.bonusAchieved)
                         .onTapGesture {
-                            viewModel.toggleBonusAchieved(for: card.id)
+                            var updatedCard = card
+                            updatedCard.bonusAchieved.toggle()
+                            viewModel.updateCard(updatedCard)
+                            card = updatedCard
+                            
                             let generator = UIImpactFeedbackGenerator(style: .medium)
                             generator.impactOccurred()
                         }
                     }
                 }
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                        .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-                )
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+                .padding(.horizontal)
+                
+                // Active/Inactive Toggle Button
+                Button(action: {
+                    if card.isActive {
+                        showingInactivateAlert = true
+                    } else {
+                        showingReactivateAlert = true
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: card.isActive ? "xmark.circle" : "checkmark.circle")
+                            .font(.headline)
+                        
+                        Text(card.isActive ? "Mark as Inactive" : "Reactivate Card")
+                            .font(.headline)
+                    }
+                    .foregroundColor(card.isActive ? .red : .green)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+                }
                 .padding(.horizontal)
                 
                 // Card details section
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Card Details")
-                        .font(AppTheme.Typography.headline)
-                        .foregroundColor(AppTheme.Colors.text)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
                     
                     ModernDetailRow(title: "Card Name", value: card.name)
                     ModernDetailRow(title: "Issuer", value: card.issuer)
                     ModernDetailRow(title: "Date Opened", value: dateFormatter.string(from: card.dateOpened))
+                    
+                    if !card.isActive, let inactiveDate = card.dateInactivated {
+                        ModernDetailRow(title: "Date Inactivated", value: dateFormatter.string(from: inactiveDate))
+                    }
+                    
                     ModernDetailRow(title: "Annual Fee", value: "$\(String(format: "%.2f", card.annualFee))")
                     ModernDetailRow(title: "Signup Bonus", value: "\(formattedNumber(card.signupBonus)) points")
                 }
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                        .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-                )
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
                 .padding(.horizontal)
                 
                 // Notes section
                 if !card.notes.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Notes")
-                            .font(AppTheme.Typography.headline)
-                            .foregroundColor(AppTheme.Colors.text)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
                         
                         Text(card.notes)
                             .font(.body)
-                            .foregroundColor(AppTheme.Colors.secondaryText)
+                            .foregroundColor(.secondary)
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray6))
-                            )
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: AppTheme.Layout.cardCornerRadius)
-                            .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-                    )
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
                     .padding(.horizontal)
                 }
                 
@@ -182,6 +226,56 @@ struct CardDetailView: View {
         .navigationTitle(card.name)
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .alert("Mark Card as Inactive", isPresented: $showingInactivateAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Mark Inactive", role: .destructive) {
+                markCardInactive()
+            }
+        } message: {
+            Text("This will mark the card as inactive as of today. You can reactivate it later if needed.")
+        }
+        .alert("Reactivate Card", isPresented: $showingReactivateAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reactivate") {
+                reactivateCard()
+            }
+        } message: {
+            Text("This will mark the card as active again.")
+        }
+    }
+    
+    // Function to handle inactivating the card
+    private func markCardInactive() {
+        var updatedCard = card
+        updatedCard.isActive = false
+        updatedCard.dateInactivated = Date()
+        
+        // Update in the ViewModel
+        viewModel.updateCard(updatedCard)
+        
+        // Update local state
+        card = updatedCard
+        
+        // Show feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+    }
+    
+    // Function to handle reactivating the card
+    private func reactivateCard() {
+        var updatedCard = card
+        updatedCard.isActive = true
+        updatedCard.dateInactivated = nil
+        
+        // Update in the ViewModel
+        viewModel.updateCard(updatedCard)
+        
+        // Update local state
+        card = updatedCard
+        
+        // Show feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
     }
     
     // Format large numbers with commas
@@ -199,7 +293,7 @@ struct CardDetailView: View {
     }
 }
 
-// 3D credit card visualization
+// Supporting Views
 struct CreditCardView: View {
     var card: CreditCard
     var isBackVisible: Bool
@@ -225,8 +319,8 @@ struct CreditCardView: View {
                 .fill(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.9),
-                            AppTheme.Colors.issuerColor(for: card.issuer)
+                            getCardColor(for: card.issuer).opacity(0.9),
+                            getCardColor(for: card.issuer)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -237,12 +331,12 @@ struct CreditCardView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
                 )
-                .shadow(color: AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.5), radius: 10, x: 0, y: 5)
+                .shadow(color: getCardColor(for: card.issuer).opacity(0.5), radius: 10, x: 0, y: 5)
             
             // Card content
             VStack(alignment: .leading) {
                 // Top section with chip and issuer
-                HStack {
+                HStack(alignment: .center, spacing: 8) {
                     // Chip
                     Rectangle()
                         .fill(Color.yellow.opacity(0.8))
@@ -255,10 +349,23 @@ struct CreditCardView: View {
                     
                     Spacer()
                     
-                    // Issuer logo/text
-                    Text(card.issuer.uppercased())
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                    // Issuer logo/text and inactive badge in a proper HStack
+                    HStack(spacing: 6) {
+                        Text(card.issuer.uppercased())
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        // Inactive badge
+                        if !card.isActive {
+                            Text("INACTIVE")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.3))
+                                .foregroundColor(.white)
+                                .cornerRadius(4)
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -314,8 +421,8 @@ struct CreditCardView: View {
                 .fill(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            AppTheme.Colors.issuerColor(for: card.issuer),
-                            AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.8)
+                            getCardColor(for: card.issuer),
+                            getCardColor(for: card.issuer).opacity(0.8)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -326,7 +433,7 @@ struct CreditCardView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
                 )
-                .shadow(color: AppTheme.Colors.issuerColor(for: card.issuer).opacity(0.5), radius: 10, x: 0, y: 5)
+                .shadow(color: getCardColor(for: card.issuer).opacity(0.5), radius: 10, x: 0, y: 5)
             
             // Card content
             VStack {
@@ -385,6 +492,20 @@ struct CreditCardView: View {
                     }
                     .padding(.top, 8)
                     
+                    // Show inactive status if applicable
+                    if !card.isActive, let inactiveDate = card.dateInactivated {
+                        HStack {
+                            Text("INACTIVE SINCE:")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            Text(formatDateShort(inactiveDate))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        .padding(.top, 8)
+                    }
+                    
                     // Legal text
                     Text("This card is subject to the terms and conditions of your cardholder agreement.")
                         .font(.system(size: 8))
@@ -416,11 +537,46 @@ struct CreditCardView: View {
         return formatter.string(from: date)
     }
     
+    // Format short date for inactive status
+    func formatDateShort(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+    
     // Format large numbers with commas
     func formattedNumber(_ number: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    // Get color for the card based on issuer
+    func getCardColor(for issuer: String) -> Color {
+        switch issuer.lowercased() {
+        case "chase":
+            return Color(red: 0.0, green: 0.45, blue: 0.94) // Vibrant blue
+        case "american express", "amex":
+            return Color(red: 0.13, green: 0.59, blue: 0.95) // Bright blue
+        case "citi":
+            return Color(red: 0.85, green: 0.23, blue: 0.23) // Vibrant red
+        case "capital one":
+            return Color(red: 0.98, green: 0.36, blue: 0.0) // Vibrant orange
+        case "discover":
+            return Color(red: 0.96, green: 0.65, blue: 0.14) // Bright yellow-orange
+        case "wells fargo":
+            return Color(red: 0.76, green: 0.06, blue: 0.15) // Deep red
+        case "bank of america":
+            return Color(red: 0.76, green: 0.15, blue: 0.26) // Wine red
+        case "barclays":
+            return Color(red: 0.15, green: 0.67, blue: 0.88) // Sky blue
+        default:
+            // Generate a nice color based on the issuer name
+            let hash = issuer.hash
+            let hue = Double(abs(hash) % 256) / 256.0
+            return Color(hue: hue, saturation: 0.7, brightness: 0.9)
+        }
     }
 }
 
@@ -434,13 +590,13 @@ struct ModernDetailRow: View {
         HStack(alignment: .center) {
             Text(title)
                 .font(.system(size: 16))
-                .foregroundColor(AppTheme.Colors.secondaryText)
+                .foregroundColor(.secondary)
             
             Spacer()
             
             Text(value)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(AppTheme.Colors.text)
+                .foregroundColor(.primary)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 6)
@@ -480,7 +636,7 @@ struct QuickStatView: View {
             // Title
             Text(title)
                 .font(.caption)
-                .foregroundColor(AppTheme.Colors.secondaryText)
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
