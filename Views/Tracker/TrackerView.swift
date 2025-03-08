@@ -46,7 +46,7 @@ struct TrackerView: View {
                             .padding(.top, 16)
                             .padding(.bottom, 4)
                             
-                            // Active cards list
+                            // Active cards - HORIZONTAL SCROLLING LAYOUT
                             if viewModel.getActiveCards().isEmpty {
                                 // Empty state for active cards
                                 VStack(spacing: 20) {
@@ -69,38 +69,56 @@ struct TrackerView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 30)
                             } else {
-                                // Active cards
-                                LazyVStack(spacing: 12) {
-                                    ForEach(viewModel.getActiveCards()) { card in
-                                        NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
-                                            CardRowView(card: card, viewModel: viewModel)
+                                // Horizontal scrolling cards
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 16) {
+                                        ForEach(viewModel.getActiveCards()) { card in
+                                            NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
+                                                HorizontalCardView(card: card, viewModel: viewModel)
+                                            }
+                                            .buttonStyle(CardButtonStyle())
                                         }
-                                        .buttonStyle(CardButtonStyle())
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 12)
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            
+                            // Card Switcher (Pagination indicator)
+                            if viewModel.getActiveCards().count > 1 {
+                                HStack(spacing: 8) {
+                                    ForEach(0..<min(viewModel.getActiveCards().count, 5), id: \.self) { index in
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.3))
+                                            .frame(width: 8, height: 8)
                                     }
                                 }
-                                .padding(.horizontal)
+                                .padding(.bottom, 16)
                             }
                         }
                         
-                        // Add Card FAB (visible only when viewing active cards)
-                        HStack {
-                            Spacer()
-                            
-                            Button(action: {
-                                showingAddCard = true
-                            }) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(16)
-                                    .background(Circle().fill(Color.blue))
-                                    .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
+                        // Add Card Button
+                        Button(action: {
+                            showingAddCard = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 18))
+                                
+                                Text("Add New Card")
+                                    .font(.headline)
                             }
-                            .padding(.trailing, 24)
-                            .padding(.top, 8)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
                         }
+                        .padding(.vertical, 16)
                         
-                        // Inactive Cards Section
+                        // Inactive Cards Section - Keep as list view
                         VStack(spacing: 8) {
                             // Section header with toggle button
                             Button(action: {
@@ -150,7 +168,7 @@ struct TrackerView: View {
                                     }
                                     .frame(maxWidth: .infinity)
                                 } else {
-                                    // Inactive cards
+                                    // Inactive cards as vertical list
                                     LazyVStack(spacing: 12) {
                                         ForEach(viewModel.getInactiveCards()) { card in
                                             NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
@@ -162,14 +180,6 @@ struct TrackerView: View {
                                     .padding(.horizontal)
                                     .padding(.bottom, 20)
                                 }
-                            }
-                            
-                            // Detailed Stats (only if we have cards)
-                            if !viewModel.cards.isEmpty {
-                                DetailedStatsView(viewModel: viewModel)
-                                    .padding(.horizontal)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 24)
                             }
                         }
                     }
@@ -192,6 +202,191 @@ struct TrackerView: View {
     }
 }
 
+// New Horizontal Card View for active cards
+// Replace the HorizontalCardView struct with this improved version
+struct HorizontalCardView: View {
+    var card: CreditCard
+    var viewModel: CardViewModel
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        // Card container
+        ZStack {
+            // Card background with gradient based on issuer
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            getCardPrimaryColor(for: card.issuer),
+                            getCardSecondaryColor(for: card.issuer)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: getCardPrimaryColor(for: card.issuer).opacity(0.4),
+                        radius: 10, x: 0, y: 5)
+            
+            // Card content with proper alignment
+            VStack(spacing: 12) {
+                // Top row with issuer logo and card type
+                HStack {
+                    // Issuer circle
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                        
+                        Text(String(card.issuer.prefix(1)))
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    Spacer()
+                    
+                    // Card type chip
+                    Text(card.issuer)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(12)
+                }
+                
+                // Center spacer to push content apart
+                Spacer()
+                
+                // Centered card name
+                Text(card.name)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                
+                // Card details - evenly spaced
+                HStack {
+                    // Annual fee section - aligned left
+                    VStack(alignment: .center, spacing: 4) {
+                        Text("ANNUAL FEE")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.8))
+                        
+                        Text("$\(Int(card.annualFee))")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    
+                    // Bonus section - aligned right
+                    VStack(alignment: .center, spacing: 4) {
+                        Text("BONUS")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.8))
+                        
+                        Text("\(formattedNumber(card.signupBonus))")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                
+                // Status indicator - centered
+                if !viewModel.isLoadingCardStatus {
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            withAnimation(.spring()) {
+                                viewModel.toggleBonusAchieved(for: card.id) { success in
+                                    if !success {
+                                        let errorGenerator = UINotificationFeedbackGenerator()
+                                        errorGenerator.notificationOccurred(.error)
+                                    }
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Text(card.bonusAchieved ? "EARNED" : "PENDING")
+                                    .font(.system(size: 12, weight: .bold))
+                                
+                                Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 12))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(card.bonusAchieved
+                                          ? Color.green.opacity(0.3)
+                                          : Color.yellow.opacity(0.3))
+                            )
+                            .foregroundColor(.white)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Spacer()
+                    }
+                }
+            }
+            .padding()
+        }
+        .frame(width: 300, height: 190)
+    }
+    
+    // Format large numbers with commas
+    func formattedNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    // Get vibrant primary color based on issuer
+    func getCardPrimaryColor(for issuer: String) -> Color {
+        switch issuer.lowercased() {
+        case "chase":
+            return Color(red: 0.0, green: 0.45, blue: 0.94) // Vibrant blue
+        case "american express", "amex":
+            return Color(red: 0.13, green: 0.59, blue: 0.95) // Bright blue
+        case "citi":
+            return Color(red: 0.85, green: 0.23, blue: 0.23) // Vibrant red
+        case "capital one":
+            return Color(red: 0.98, green: 0.36, blue: 0.0) // Vibrant orange
+        case "discover":
+            return Color(red: 0.96, green: 0.65, blue: 0.14) // Bright yellow-orange
+        case "wells fargo":
+            return Color(red: 0.76, green: 0.06, blue: 0.15) // Deep red
+        case "bank of america":
+            return Color(red: 0.76, green: 0.15, blue: 0.26) // Wine red
+        case "barclays":
+            return Color(red: 0.15, green: 0.67, blue: 0.88) // Sky blue
+        default:
+            let hash = issuer.hash
+            let hue = Double(abs(hash) % 256) / 256.0
+            return Color(hue: hue, saturation: 0.7, brightness: 0.9)
+        }
+    }
+    
+    // Get a complementary secondary color
+    func getCardSecondaryColor(for issuer: String) -> Color {
+        let primary = getCardPrimaryColor(for: issuer)
+        
+        // Extract the primary color components and create a complementary gradient color
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        UIColor(primary).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        // Adjust hue slightly for a nice gradient (not too contrasting)
+        let newHue = fmod(hue + 0.05, 1.0)
+        
+        return Color(hue: Double(newHue), saturation: Double(saturation * 0.9), brightness: Double(brightness * 0.85))
+    }
+}
 // Custom button style for card interactions
 struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -199,50 +394,5 @@ struct CardButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
-// TrackerStatCard component for stats display
-struct TrackerStatCard: View {
-    var title: String
-    var value: String
-    var iconName: String
-    var iconColor: Color
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Icon in circle
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                
-                Image(systemName: iconName)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(iconColor)
-            }
-            
-            // Value with responsive text size
-            Text(value)
-                .font(.system(size: value.count > 6 ? 16 : 18, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-                .foregroundColor(.primary)
-            
-            // Title
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-        )
     }
 }

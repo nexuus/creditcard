@@ -99,46 +99,37 @@ struct CardDetailView: View {
                 .padding(.horizontal)
                 
                 // Status section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Bonus Status")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                // Modern toggle switch
+                ZStack {
+                    Capsule()
+                        .fill(card.bonusAchieved ? Color.green : Color.gray.opacity(0.3))
+                        .frame(width: 50, height: 30)
                     
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(card.bonusAchieved ? "Bonus Achieved" : "Bonus Pending")
-                                .font(.headline)
-                                .foregroundColor(card.bonusAchieved ? .green : .orange)
-                            
-                            Text(card.bonusAchieved ? "You've earned these points!" : "Still working toward this bonus")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        // Modern toggle switch
-                        ZStack {
-                            Capsule()
-                                .fill(card.bonusAchieved ? Color.green : Color.gray.opacity(0.3))
-                                .frame(width: 50, height: 30)
-                            
-                            Circle()
-                                .fill(Color.white)
-                                .shadow(radius: 1)
-                                .frame(width: 26, height: 26)
-                                .offset(x: card.bonusAchieved ? 10 : -10)
-                        }
-                        .animation(.spring(), value: card.bonusAchieved)
-                        .onTapGesture {
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(radius: 1)
+                        .frame(width: 26, height: 26)
+                        .offset(x: card.bonusAchieved ? 10 : -10)
+                }
+                .animation(.spring(), value: card.bonusAchieved)
+                .onTapGesture {
+                    // Use the consistent toggle method instead of manual update
+                    viewModel.toggleBonusAchieved(for: card.id) { success in
+                        if success {
+                            // Update local state only if the toggle was successful
                             var updatedCard = card
                             updatedCard.bonusAchieved.toggle()
-                            viewModel.updateCard(updatedCard)
-                            card = updatedCard
+                            self.card = updatedCard
                             
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
+                            // Extra verification that changes are saved
+                            print("✅ Card status toggle successful in CardDetailView")
+                            // Force an extra save to be certain
+                            _ = viewModel.enhancedSaveCards()
+                        } else {
+                            // Show error feedback if the toggle failed
+                            print("❌ Card status toggle failed in CardDetailView")
+                            let errorGenerator = UINotificationFeedbackGenerator()
+                            errorGenerator.notificationOccurred(.error)
                         }
                     }
                 }

@@ -52,52 +52,36 @@ class UserService: ObservableObject {
     }
     
     func saveUser() {
-        guard let user = currentUser else { return }
-        
-        do {
-            let encoded = try JSONEncoder().encode(user)
-            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
-            UserDefaults.standard.set(true, forKey: isLoggedInKey)
+            guard let user = currentUser else { return }
             
-            // Also save cards directly for redundancy
-            saveCardsDirectly(user.cards)
-            
-            print("💾 User saved successfully with \(user.cards.count) cards")
-        } catch {
-            print("❌ Error saving user: \(error)")
+            do {
+                let encoder = JSONEncoder()
+                
+                // Ensure we're using the latest card data before saving
+                if !user.cards.isEmpty {
+                    print("💾 About to save user with \(user.cards.count) cards")
+                    
+                    // Debug: check bonus status before saving
+                    for (i, card) in user.cards.enumerated() {
+                        print("  Card \(i+1): \(card.name) - Bonus Achieved: \(card.bonusAchieved)")
+                    }
+                }
+                
+                let encoded = try encoder.encode(user)
+                UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
+                UserDefaults.standard.set(true, forKey: isLoggedInKey)
+                
+                // Also save cards directly for redundancy
+                saveCardsDirectly(user.cards)
+                
+                // Force synchronize to ensure data is written immediately
+                UserDefaults.standard.synchronize()
+                
+                print("💾 User saved successfully with \(user.cards.count) cards")
+            } catch {
+                print("❌ Error saving user: \(error)")
+            }
         }
-    }
-    
-    func updateUserCards(cards: [CreditCard]) {
-        guard var user = currentUser else {
-            // If not logged in, still save cards directly
-            saveCardsDirectly(cards)
-            return
-        }
-        
-        user.cards = cards
-        currentUser = user
-        saveUser()
-        
-        // Save timestamp of last update
-        UserDefaults.standard.set(Date(), forKey: "lastCardUpdate")
-    }
-    
-    // New method to directly save cards for redundancy
-    private func saveCardsDirectly(_ cards: [CreditCard]) {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(cards)
-            UserDefaults.standard.set(data, forKey: cardsDefaultsKey)
-            
-            // Save timestamp
-            UserDefaults.standard.set(Date(), forKey: "lastCardUpdate")
-            
-            print("💾 Saved \(cards.count) cards directly")
-        } catch {
-            print("❌ Error saving cards directly: \(error)")
-        }
-    }
     
     private func loadUser() {
         self.isLoggedIn = UserDefaults.standard.bool(forKey: isLoggedInKey)
@@ -130,23 +114,6 @@ class UserService: ObservableObject {
         return nil
     }
     
-    // Load cards directly from UserDefaults
-    func loadCardsDirectly() -> [CreditCard]? {
-        guard let data = UserDefaults.standard.data(forKey: cardsDefaultsKey) else {
-            return nil
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            let cards = try decoder.decode([CreditCard].self, from: data)
-            print("📤 Loaded \(cards.count) cards directly")
-            return cards
-        } catch {
-            print("❌ Error loading cards directly: \(error)")
-            return nil
-        }
-    }
-    
     // Check if card collections are different
     private func cardsAreDifferent(_ cards1: [CreditCard], _ cards2: [CreditCard]) -> Bool {
         // Quick check: different count means different collections
@@ -165,5 +132,90 @@ class UserService: ObservableObject {
         }
         
         return false
+    }
+}
+
+extension UserService {
+    // Enhanced update user cards method with better error handling
+    func updateUserCards(cards: [CreditCard]) {
+        // Always perform UserDefaults operations on main thread
+        DispatchQueue.main.async {
+            // First, save cards directly for redundancy
+            self.saveCardsDirectly(cards)
+            
+            // Then update user if logged in
+            if var user = self.currentUser {
+                user.cards = cards
+                self.currentUser = user
+                self.saveUser()
+                
+                print("✅ Updated user account with \(cards.count) cards")
+            }
+            
+            // Save timestamp of last update
+            UserDefaults.standard.set(Date(), forKey: "lastCardUpdate")
+        }
+    }
+    
+    // Improved direct card saving with better error handling
+    private func saveCardsDirectly(_ cards: [CreditCard]) {
+           do {
+               // Debug: Check card status before encoding
+               print("📊 Directly saving \(cards.count) cards")
+               for (i, card) in cards.enumerated() {
+                   print("  Card \(i+1): \(card.name) - Bonus Status: \(card.bonusAchieved)")
+               }
+               
+               let encoder = JSONEncoder()
+               let data = try encoder.encode(cards)
+               UserDefaults.standard.set(data, forKey: cardsDefaultsKey)
+               
+               // Force synchronize to ensure data is written immediately
+               UserDefaults.standard.synchronize()
+               
+               // Save timestamp
+               UserDefaults.standard.set(Date(), forKey: "lastCardUpdate")
+               
+               print("💾 Saved \(cards.count) cards directly")
+               
+               // Debug: verify what was saved
+               if let savedData = UserDefaults.standard.data(forKey: cardsDefaultsKey) {
+                   do {
+                       let decoder = JSONDecoder()
+                       let savedCards = try decoder.decode([CreditCard].self, from: savedData)
+                       print("  Verification: \(savedCards.count) cards were saved")
+                       
+                       // Check each card's bonus status
+                       for (i, card) in savedCards.enumerated() {
+                           print("  Saved Card \(i+1): \(card.name) - Saved Bonus Status: \(card.bonusAchieved)")
+                       }
+                   } catch {
+                       print("❌ Error verifying saved cards: \(error)")
+                   }
+               }
+           } catch {
+               print("❌ Error saving cards directly: \(error)")
+           }
+       }
+   
+    
+    // Make this method public for direct access
+    func loadCardsDirectly() -> [CreditCard]? {
+        guard let data = UserDefaults.standard.data(forKey: cardsDefaultsKey) else {
+            return nil
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let cards = try decoder.decode([CreditCard].self, from: data)
+            print("📤 Loaded \(cards.count) cards directly")
+            return cards
+        } catch {
+            print("❌ Error loading cards directly: \(error)")
+            
+            // Recovery attempt - clear corrupted data
+            UserDefaults.standard.removeObject(forKey: cardsDefaultsKey)
+            return nil
+        }
     }
 }

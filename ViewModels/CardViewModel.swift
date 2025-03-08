@@ -17,6 +17,7 @@ class CardViewModel: ObservableObject {
     @Published var isLoadingCards: Bool = false
     @Published var isLoadingDetails: Bool = false
     @Published var apiLoadingError: String? = nil
+    @Published var isLoadingCardStatus: Bool = true
     private var cancellables = Set<AnyCancellable>()
     
     // List of major banks to show by default
@@ -65,15 +66,6 @@ class CardViewModel: ObservableObject {
     
     // MARK: - User Card Management
     
-    
-    func updateCard(_ card: CreditCard) {
-            if let index = cards.firstIndex(where: { $0.id == card.id }) {
-                cards[index] = card
-                saveCards()
-                // Force UI refresh
-                objectWillChange.send()
-            }
-        }
         
         // Get active cards only
         func getActiveCards() -> [CreditCard] {
@@ -102,43 +94,6 @@ class CardViewModel: ObservableObject {
     func deleteCard(at offsets: IndexSet) {
         cards.remove(atOffsets: offsets)
         saveCards()
-    }
-    
-    func toggleBonusAchieved(for cardID: UUID) {
-        if let index = cards.firstIndex(where: { $0.id == cardID }) {
-            // Toggle the status
-            cards[index].bonusAchieved.toggle()
-            
-            // Save changes immediately
-            saveCards()
-            
-            // Optional: Add haptic feedback for better user experience
-            let generator = UIImpactFeedbackGenerator(style: .medium)
-            generator.impactOccurred()
-            
-            // Log the change for debugging
-            let status = cards[index].bonusAchieved ? "earned" : "pending"
-            let points = cards[index].signupBonus
-            print("💾 Card status changed: \(cards[index].name) marked as \(status) (\(points) points)")
-        }
-    }
-
-    func saveCardsLocally() {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(cards)
-            UserDefaults.standard.set(data, forKey: "savedCards")
-            
-            print("💾 Cards saved locally: \(cards.count) cards")
-        } catch {
-            print("❌ Error saving cards locally: \(error)")
-        }
-    }
-    
-    func saveCards() {
-        if UserService.shared.isLoggedIn {
-            UserService.shared.updateUserCards(cards: cards)
-        }
     }
     
     
@@ -544,16 +499,26 @@ extension CardViewModel {
     
     // Enhanced load user cards method with fallback to local storage
     func loadUserCards() {
-        if let user = UserService.shared.currentUser {
-            self.cards = user.cards
-            print("📤 Loaded \(cards.count) cards from user account")
-        } else {
-            // Try to load from local storage if not logged in
-            if let localCards = loadCardsLocally() {
-                self.cards = localCards
+        // Set loading state first
+        isLoadingCardStatus = true
+        
+        // A brief artificial delay to ensure UI shows the loading state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let user = UserService.shared.currentUser {
+                self.cards = user.cards
+                print("📤 Loaded \(self.cards.count) cards from user account")
             } else {
-                loadSampleData()
+                // Try to load from local storage if not logged in
+                if let localCards = self.loadCardsLocally() {
+                    self.cards = localCards
+                    print("📤 Loaded \(self.cards.count) cards from local storage")
+                } else {
+                    self.loadSampleData()
+                }
             }
+            
+            // Turn off loading state
+            self.isLoadingCardStatus = false
         }
     }
         // Add a method to force-refresh all data
@@ -621,5 +586,337 @@ extension CardViewModel {
         }
         
         isLoadingCards = false
+    }
+}
+
+import SwiftUI
+import Foundation
+import Combine
+
+extension CardViewModel {
+    // Enhanced card update method with better error handling
+    func updateCard(_ card: CreditCard, completion: ((Bool) -> Void)? = nil) {
+        // Ensure we're on the main thread for UI operations
+        DispatchQueue.main.async {
+            if let index = self.cards.firstIndex(where: { $0.id == card.id }) {
+                // Update card in the array
+                self.cards[index] = card
+                
+                // Attempt to save changes
+                let success = self.saveCards()
+                
+                // Force UI refresh
+                self.objectWillChange.send()
+                
+                if success {
+                    print("✅ Successfully updated card: \(card.name)")
+                    completion?(true)
+                } else {
+                    print("❌ Error updating card: \(card.name)")
+                    // Revert change if save failed
+                    if let oldCards = UserService.shared.loadCardsDirectly() {
+                        self.cards = oldCards
+                    }
+                    completion?(false)
+                }
+            } else {
+                print("⚠️ Card not found in array: \(card.id)")
+                completion?(false)
+            }
+        }
+    }
+    
+    // Enhanced toggle method with force save
+    func toggleBonusAchieved(for cardID: UUID, completion: ((Bool) -> Void)? = nil) {
+        // Ensure we're on the main thread
+        DispatchQueue.main.async {
+            if let index = self.cards.firstIndex(where: { $0.id == cardID }) {
+                // Create a copy of the card
+                var updatedCard = self.cards[index]
+                
+                // Toggle the status
+                updatedCard.bonusAchieved.toggle()
+                
+                // Update the card in the array
+                self.cards[index] = updatedCard
+                
+                // CRITICAL: Force save to UserDefaults immediately
+                self.saveCards()
+                
+                // Force UserDefaults to synchronize
+                UserDefaults.standard.synchronize()
+                
+                // Provide feedback
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+                
+                // Log the change
+                let status = updatedCard.bonusAchieved ? "earned" : "pending"
+                print("💾 Card status changed: \(updatedCard.name) marked as \(status)")
+                
+                completion?(true)
+            } else {
+                print("⚠️ Card not found for toggle: \(cardID)")
+                completion?(false)
+            }
+        }
+    }
+    
+    // Improved save method with error handling
+    func saveCards() -> Bool {
+        do {
+            if UserService.shared.isLoggedIn {
+                UserService.shared.updateUserCards(cards: cards)
+            } else {
+                // Save locally if not logged in
+                if !saveCardsLocally() {
+                    return false
+                }
+            }
+            
+            // Set timestamp for last update
+            UserDefaults.standard.set(Date(), forKey: "lastDataUpdate")
+            return true
+        } catch {
+            print("❌ Error in saveCards: \(error)")
+            return false
+        }
+    }
+    
+    // Improved local saving with error handling
+    func saveCardsLocally() -> Bool {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(cards)
+            UserDefaults.standard.set(data, forKey: "savedCards")
+            
+            print("💾 Cards saved locally: \(cards.count) cards")
+            return true
+        } catch {
+            print("❌ Error saving cards locally: \(error)")
+            return false
+        }
+    }
+}
+
+import SwiftUI
+import Foundation
+
+// Add this to the CardViewModel.swift file to debug the issue
+
+extension CardViewModel {
+    // This function will print the current state of all cards
+    func debugCardStatus() {
+        print("\n===== DEBUG: CURRENT CARD STATUS =====")
+        for (index, card) in cards.enumerated() {
+            print("Card \(index+1): \(card.name) - Bonus Achieved: \(card.bonusAchieved)")
+        }
+        print("=====================================\n")
+    }
+    
+    // Call this to check what's stored in UserDefaults
+    func debugStoredCards() {
+        print("\n===== DEBUG: STORED CARD STATUS =====")
+        
+        // Check cards stored directly
+        if let storedCards = UserDefaults.standard.data(forKey: "savedCards") {
+            do {
+                let decoder = JSONDecoder()
+                let decodedCards = try decoder.decode([CreditCard].self, from: storedCards)
+                print("Found \(decodedCards.count) cards in UserDefaults 'savedCards'")
+                for (index, card) in decodedCards.enumerated() {
+                    print("Stored Card \(index+1): \(card.name) - Bonus Achieved: \(card.bonusAchieved)")
+                }
+            } catch {
+                print("❌ Error decoding stored cards: \(error)")
+            }
+        } else {
+            print("❌ No cards found in UserDefaults 'savedCards'")
+        }
+        
+        // Check if the user is logged in
+        if UserService.shared.isLoggedIn, let user = UserService.shared.currentUser {
+            print("\nUser is logged in, found \(user.cards.count) cards in user account")
+            for (index, card) in user.cards.enumerated() {
+                print("User Card \(index+1): \(card.name) - Bonus Achieved: \(card.bonusAchieved)")
+            }
+        } else {
+            print("\nUser is not logged in")
+        }
+        
+        print("=====================================\n")
+    }
+    
+    // Call this when loading cards to verify what's being loaded
+    func enhancedLoadUserCards() {
+        print("\n===== DEBUG: LOADING USER CARDS =====")
+        
+        // First try loading from UserService (when logged in)
+        if let user = UserService.shared.currentUser {
+            self.cards = user.cards
+            print("✅ Loaded \(cards.count) cards from user account")
+            debugCardStatus()
+        } else {
+            // Try to load from local storage if not logged in
+            print("Not logged in, trying local storage...")
+            
+            if let localCards = loadCardsLocally() {
+                self.cards = localCards
+                print("✅ Loaded \(cards.count) cards from local storage")
+                debugCardStatus()
+            } else {
+                print("❌ No cards found in local storage, using sample data")
+                loadSampleData()
+                debugCardStatus()
+            }
+        }
+        
+        print("=====================================\n")
+    }
+    
+    // Enhanced save method with more logging
+    func enhancedSaveCards() -> Bool {
+        print("\n===== DEBUG: SAVING CARDS =====")
+        debugCardStatus()
+        
+        do {
+            if UserService.shared.isLoggedIn {
+                print("User logged in, saving to user account...")
+                UserService.shared.updateUserCards(cards: cards)
+            } else {
+                // Save locally if not logged in
+                print("User not logged in, saving locally...")
+                if !enhancedSaveCardsLocally() {
+                    print("❌ Failed to save cards locally")
+                    return false
+                }
+            }
+            
+            // Set timestamp for last update
+            UserDefaults.standard.set(Date(), forKey: "lastDataUpdate")
+            print("✅ Cards saved successfully")
+            
+            // Force synchronize to ensure data is written immediately
+            UserDefaults.standard.synchronize()
+            
+            // Verify what was actually saved
+            debugStoredCards()
+            
+            return true
+        } catch {
+            print("❌ Error in saveCards: \(error)")
+            return false
+        }
+    }
+    
+    // Enhanced local saving with more logging
+    func enhancedSaveCardsLocally() -> Bool {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(cards)
+            
+            // Before saving, check if what we're about to save is different
+            if let existingData = UserDefaults.standard.data(forKey: "savedCards") {
+                do {
+                    let existingCards = try JSONDecoder().decode([CreditCard].self, from: existingData)
+                    print("Found \(existingCards.count) existing cards in UserDefaults")
+                    
+                    // Compare card status
+                    for (newCard, oldCard) in zip(cards, existingCards) {
+                        if newCard.id == oldCard.id && newCard.bonusAchieved != oldCard.bonusAchieved {
+                            print("⚠️ Card status changing: \(newCard.name) from \(oldCard.bonusAchieved) to \(newCard.bonusAchieved)")
+                        }
+                    }
+                } catch {
+                    print("❌ Error comparing existing cards: \(error)")
+                }
+            }
+            
+            // Save the data
+            UserDefaults.standard.set(data, forKey: "savedCards")
+            
+            // Force synchronize
+            UserDefaults.standard.synchronize()
+            
+            print("💾 Cards saved locally: \(cards.count) cards")
+            return true
+        } catch {
+            print("❌ Error saving cards locally: \(error)")
+            return false
+        }
+    }
+}
+
+// Add this to CardViewModel.swift
+
+import SwiftUI
+import Foundation
+import Combine
+
+extension CardViewModel {
+    // Modified method to initialize with loading state
+    func initializeWithLoadingState() {
+        // Set loading state to true
+        isLoadingCardStatus = true
+        
+        // Perform loading on background thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Load cards
+            let loadedCards = self.loadCardsWithPriority()
+            
+            // Update on main thread
+            DispatchQueue.main.async {
+                self.cards = loadedCards
+                // Turn off loading state
+                self.isLoadingCardStatus = false
+                print("✅ Card loading complete with \(self.cards.count) cards")
+            }
+        }
+    }
+    
+    // New optimized loading method that prioritizes card status
+    private func loadCardsWithPriority() -> [CreditCard] {
+        print("🔄 Loading cards with priority...")
+        
+        // First try to load from UserDefaults directly as it's fastest
+        if let localCards = loadCardsDirectlyFromDefaults() {
+            print("📦 Loaded \(localCards.count) cards directly from UserDefaults")
+            return localCards
+        }
+        
+        // Then try user account if logged in
+        if let user = UserService.shared.currentUser {
+            print("👤 Loaded \(user.cards.count) cards from user account")
+            return user.cards
+        }
+        
+        // Fall back to local storage (might be redundant but keeping for safety)
+        if let localCards = loadCardsLocally() {
+            print("💾 Loaded \(localCards.count) cards from local storage")
+            return localCards
+        }
+        
+        // Last resort: sample data
+        print("⚠️ Using sample data")
+        var sampleCards: [CreditCard] = []
+        loadSampleData()
+        sampleCards = self.cards
+        return sampleCards
+    }
+    
+    // Direct UserDefaults access for speed
+    private func loadCardsDirectlyFromDefaults() -> [CreditCard]? {
+        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
+            return nil
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let cards = try decoder.decode([CreditCard].self, from: data)
+            return cards
+        } catch {
+            print("❌ Error in direct UserDefaults loading: \(error)")
+            return nil
+        }
     }
 }

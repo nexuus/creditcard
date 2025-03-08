@@ -118,32 +118,46 @@ struct CardRowView: View {
                     if card.isActive {
                         Button(action: {
                             withAnimation(.spring()) {
-                                var updatedCard = card
-                                updatedCard.bonusAchieved.toggle()
-                                viewModel.updateCard(updatedCard)
-                                
-                                let generator = UIImpactFeedbackGenerator(style: .medium)
-                                generator.impactOccurred()
+                                // Use the consistent toggle method
+                                viewModel.toggleBonusAchieved(for: card.id) { success in
+                                    if !success {
+                                        // Show error feedback if the toggle failed
+                                        let errorGenerator = UINotificationFeedbackGenerator()
+                                        errorGenerator.notificationOccurred(.error)
+                                    }
+                                }
                             }
                         }) {
-                            HStack(spacing: 4) {
-                                Text(card.bonusAchieved ? "Earned" : "Pending")
+                            // Simplified button content
+                            if viewModel.isLoadingCardStatus {
+                                // Loading state
+                                Text("Loading...")
                                     .font(.system(size: 12, weight: .semibold))
-                                
-                                Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 12))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Color.gray.opacity(0.15)))
+                                    .foregroundColor(Color.gray)
+                            } else {
+                                // Regular state
+                                HStack(spacing: 4) {
+                                    Text(card.bonusAchieved ? "Earned" : "Pending")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    
+                                    Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 12))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(card.bonusAchieved
+                                              ? Color.green.opacity(0.15)
+                                              : Color.orange.opacity(0.15))
+                                )
+                                .foregroundColor(card.bonusAchieved
+                                                 ? Color.green
+                                                 : Color.orange)
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(card.bonusAchieved
-                                          ? Color.green.opacity(0.15)
-                                          : Color.orange.opacity(0.15))
-                            )
-                            .foregroundColor(card.bonusAchieved
-                                             ? Color.green
-                                             : Color.orange)
                         }
                         .buttonStyle(PlainButtonStyle())
                     } else {

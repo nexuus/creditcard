@@ -16,6 +16,8 @@ import Combine
 //
 //  CreditCardTrackerApp.swift
 
+// Update your CreditCardTrackerApp.swift with this improved initialization
+
 @main
 struct CreditCardTrackerApp: App {
     @StateObject private var viewModel = CardViewModel()
@@ -24,7 +26,10 @@ struct CreditCardTrackerApp: App {
         WindowGroup {
             MainAppView(viewModel: viewModel)
                 .onAppear {
-                    // Force initial load of API data
+                    // First load card data with loading state
+                    viewModel.initializeWithLoadingState()
+                    
+                    // Then load API data in the background
                     Task {
                         await viewModel.loadCreditCardsFromAPI()
                         
