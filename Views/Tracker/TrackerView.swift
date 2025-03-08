@@ -181,7 +181,15 @@ struct TrackerView: View {
                                     .padding(.bottom, 20)
                                 }
                             }
+                            
                         }
+                        if !viewModel.cards.isEmpty {
+                                                   DetailedStatsView(viewModel: viewModel)
+                                                       .padding(.horizontal)
+                                                       .padding(.top, 8)
+                                                       .padding(.bottom, 24)
+                                               }
+                        
                     }
                     .padding(.top) // Add some padding at the top of the entire content
                 }
@@ -203,7 +211,6 @@ struct TrackerView: View {
 }
 
 // New Horizontal Card View for active cards
-// Replace the HorizontalCardView struct with this improved version
 struct HorizontalCardView: View {
     var card: CreditCard
     var viewModel: CardViewModel
@@ -228,10 +235,10 @@ struct HorizontalCardView: View {
                         radius: 10, x: 0, y: 5)
             
             // Card content with proper alignment
-            VStack(spacing: 12) {
+            VStack(alignment: .center, spacing: 12) {
                 // Top row with issuer logo and card type
-                HStack {
-                    // Issuer circle
+                HStack(alignment: .center) {
+                    // Issuer circle - with proper centering
                     ZStack {
                         Circle()
                             .fill(Color.white.opacity(0.2))
@@ -240,11 +247,13 @@ struct HorizontalCardView: View {
                         Text(String(card.issuer.prefix(1)))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.white)
+                            .frame(width: 40, height: 40)
+                            .multilineTextAlignment(.center)
                     }
                     
                     Spacer()
                     
-                    // Card type chip
+                    // Card type chip - with better padding and alignment
                     Text(card.issuer)
                         .font(.caption)
                         .fontWeight(.bold)
@@ -253,6 +262,7 @@ struct HorizontalCardView: View {
                         .padding(.vertical, 5)
                         .background(Color.white.opacity(0.2))
                         .cornerRadius(12)
+                        .multilineTextAlignment(.center)
                 }
                 
                 // Center spacer to push content apart
@@ -264,71 +274,72 @@ struct HorizontalCardView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                     .lineLimit(1)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
                 
-                // Card details - evenly spaced
-                HStack {
-                    // Annual fee section - aligned left
+                // Card details - evenly spaced with better alignment
+                HStack(alignment: .center) {
+                    // Annual fee section - aligned center
                     VStack(alignment: .center, spacing: 4) {
                         Text("ANNUAL FEE")
                             .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
                         
                         Text("$\(Int(card.annualFee))")
                             .font(.headline)
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     
-                    // Bonus section - aligned right
+                    // Bonus section - aligned center
                     VStack(alignment: .center, spacing: 4) {
                         Text("BONUS")
                             .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
                         
                         Text("\(formattedNumber(card.signupBonus))")
                             .font(.headline)
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 
-                // Status indicator - centered
+                // Status indicator - properly centered
                 if !viewModel.isLoadingCardStatus {
-                    HStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            withAnimation(.spring()) {
-                                viewModel.toggleBonusAchieved(for: card.id) { success in
-                                    if !success {
-                                        let errorGenerator = UINotificationFeedbackGenerator()
-                                        errorGenerator.notificationOccurred(.error)
-                                    }
+                    Button(action: {
+                        withAnimation(.spring()) {
+                            viewModel.toggleBonusAchieved(for: card.id) { success in
+                                if !success {
+                                    let errorGenerator = UINotificationFeedbackGenerator()
+                                    errorGenerator.notificationOccurred(.error)
                                 }
                             }
-                        }) {
-                            HStack(spacing: 6) {
-                                Text(card.bonusAchieved ? "EARNED" : "PENDING")
-                                    .font(.system(size: 12, weight: .bold))
-                                
-                                Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 12))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(card.bonusAchieved
-                                          ? Color.green.opacity(0.3)
-                                          : Color.yellow.opacity(0.3))
-                            )
-                            .foregroundColor(.white)
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Spacer()
+                    }) {
+                        HStack(spacing: 6) {
+                            Text(card.bonusAchieved ? "EARNED" : "PENDING")
+                                .font(.system(size: 12, weight: .bold))
+                                .multilineTextAlignment(.center)
+                            
+                            Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 12))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(card.bonusAchieved
+                                      ? Color.green.opacity(0.3)
+                                      : Color.yellow.opacity(0.3))
+                        )
+                        .foregroundColor(.white)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
             .padding()
@@ -387,6 +398,7 @@ struct HorizontalCardView: View {
         return Color(hue: Double(newHue), saturation: Double(saturation * 0.9), brightness: Double(brightness * 0.85))
     }
 }
+
 // Custom button style for card interactions
 struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
