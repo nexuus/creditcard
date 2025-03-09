@@ -11,22 +11,35 @@ class CreditCardService {
     private let detailCachePrefix = "cachedDetail_"
     private let cacheDurationInDays = 7 // Cache expires after 7 days
     
-    // In-memory caches
+    // Thread-safe in-memory caches
     private var cachedCards: [CreditCardInfo]? = nil
     private var cachedCardDetails: [String: CreditCardInfo] = [:]
-    private var imageCache: [String: UIImage] = [:]
+    private let imageCache = NSCache<NSString, UIImage>()
+    
+    // Serial queue for thread-safe operations
+    private let cacheQueue = DispatchQueue(label: "com.creditcardtracker.cacheQueue")
+    
+    // Initialization
+    private init() {
+        // Configure image cache
+        imageCache.name = "CreditCardImageCache"
+        imageCache.countLimit = 100 // Limit to 100 images
+        imageCache.totalCostLimit = 50 * 1024 * 1024 // Limit to ~50MB
+    }
     
     // MARK: - Cache Management
     
-    // Load cards from cache or API
-    // Add this method to the CreditCardService class
-
     // Fetch comprehensive card catalog by combining basic and search endpoints
     func fetchComprehensiveCardCatalog() async throws -> [CreditCardInfo] {
         print("📊 Fetching comprehensive card catalog...")
         
         // First check cache
-        if let cachedCards = self.cachedCards {
+        var cachedResult: [CreditCardInfo]?
+        cacheQueue.sync {
+            cachedResult = self.cachedCards
+        }
+        
+        if let cachedCards = cachedResult {
             print("📋 Using cached comprehensive catalog with \(cachedCards.count) cards")
             return cachedCards
         }
@@ -76,8 +89,10 @@ class CreditCardService {
             return $0.issuer < $1.issuer
         }
         
-        // Cache the results
-        self.cachedCards = allCards
+        // Cache the results in a thread-safe way
+        cacheQueue.sync {
+            self.cachedCards = allCards
+        }
         
         // Save to device cache
         saveCardsToDevice(allCards)
@@ -85,57 +100,6 @@ class CreditCardService {
         print("✅ Complete catalog contains \(allCards.count) unique credit cards")
         return allCards
     }
-    
-    // Add this method to the CreditCardService class
-
-    // Fallback method for fetching images from URL
-    func fetchCardImageFromURL(for url: String) async -> UIImage? {
-        // Check cache first
-        if let cachedImage = imageCache[url] {
-            print("🖼️ Using cached image for URL: \(url)")
-            return cachedImage
-        }
-        
-        // Check disk cache
-        if let diskCachedImage = loadImageFromDisk(for: url) {
-            print("🖼️ Using disk cached image for URL: \(url)")
-            imageCache[url] = diskCachedImage
-            return diskCachedImage
-        }
-        
-        // Skip if URL is empty
-        guard !url.isEmpty, let imageURL = URL(string: url) else {
-            print("❌ Invalid image URL: \(url)")
-            return nil
-        }
-        
-        print("🌐 Fetching image from URL: \(url)")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(from: imageURL)
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                print("❌ Invalid response fetching image from URL")
-                return nil
-            }
-            
-            if let image = UIImage(data: data) {
-                print("✅ Successfully loaded image from URL")
-                // Cache the image
-                imageCache[url] = image
-                saveToDiskCache(image: image, for: url)
-                return image
-            } else {
-                print("❌ Invalid image data from URL")
-            }
-        } catch {
-            print("❌ Error fetching image from URL: \(error)")
-        }
-        
-        return nil
-    }
-
     
     // Fetch cards using search terms
     func fetchCardsBySearch(searchTerms: [String]) async throws -> [CreditCardInfo] {
@@ -163,38 +127,14 @@ class CreditCardService {
         return allCards
     }
     
-    // Add this method to the CreditCardService class
-
-    // Test searching for specific cards
-    func testSearchAPI(term: String) async {
-        print("🧪 TESTING SEARCH API WITH TERM: \(term)")
-        
-        do {
-            let searchResults: CardSearchAPIResponse = try await APIClient.fetchCardsBySearchTerm(term)
-            print("✅ Found \(searchResults.count) cards for search term '\(term)'")
-            
-            // Print details about each card
-            for (index, card) in searchResults.enumerated() {
-                print("  Card \(index + 1): \(card.cardName) by \(card.cardIssuer) (ID: \(card.cardKey))")
-            }
-            
-            // Try to fetch an image for the first card if available
-            if let firstCard = searchResults.first {
-                print("🖼️ Testing image fetch for: \(firstCard.cardKey)")
-                if let _ = await fetchCardImage(for: firstCard.cardKey) {
-                    print("✅ Successfully fetched image for \(firstCard.cardKey)")
-                } else {
-                    print("❌ Failed to fetch image for \(firstCard.cardKey)")
-                }
-            }
-        } catch {
-            print("❌ Error testing search API: \(error)")
-        }
-    }
-    
     func fetchCreditCards() async throws -> [CreditCardInfo] {
-        // First check in-memory cache
-        if let cachedCards = cachedCards {
+        // First check in-memory cache (thread-safe)
+        var cachedResult: [CreditCardInfo]?
+        cacheQueue.sync {
+            cachedResult = self.cachedCards
+        }
+        
+        if let cachedCards = cachedResult {
             print("📋 Using in-memory cached cards")
             return cachedCards
         }
@@ -202,7 +142,9 @@ class CreditCardService {
         // Then check device storage
         if let cachedData = loadCardsFromDevice() {
             print("📋 Using device cached cards")
-            self.cachedCards = cachedData
+            cacheQueue.sync {
+                self.cachedCards = cachedData
+            }
             return cachedData
         }
         
@@ -220,8 +162,17 @@ class CreditCardService {
     
     // Fetch a specific card's details, using cache when available
     func fetchCardDetail(cardKey: String) async throws -> CreditCardInfo {
-        // Check in-memory cache first
-        if let cachedDetail = cachedCardDetails[cardKey] {
+        guard !cardKey.isEmpty else {
+            throw NSError(domain: "CreditCardService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Empty card key provided"])
+        }
+        
+        // Check in-memory cache first (thread-safe)
+        var cachedResult: CreditCardInfo?
+        cacheQueue.sync {
+            cachedResult = self.cachedCardDetails[cardKey]
+        }
+        
+        if let cachedDetail = cachedResult {
             print("📋 Using in-memory cached details for \(cardKey)")
             return cachedDetail
         }
@@ -229,7 +180,9 @@ class CreditCardService {
         // Check device storage
         if let cachedDetail = loadCardDetailFromDevice(cardKey: cardKey) {
             print("📋 Using device cached details for \(cardKey)")
-            cachedCardDetails[cardKey] = cachedDetail
+            cacheQueue.sync {
+                self.cachedCardDetails[cardKey] = cachedDetail
+            }
             return cachedDetail
         }
         
@@ -243,9 +196,15 @@ class CreditCardService {
             print("❌ API Error for card details: \(error)")
             
             // Try to return basic info if available
-            if let basicCards = cachedCards,
-               let basicInfo = basicCards.first(where: { $0.id == cardKey }) {
-                return basicInfo
+            var basicInfo: CreditCardInfo?
+            cacheQueue.sync {
+                if let cachedCards = self.cachedCards {
+                    basicInfo = cachedCards.first(where: { $0.id == cardKey })
+                }
+            }
+            
+            if let info = basicInfo {
+                return info
             }
             
             throw error
@@ -254,14 +213,21 @@ class CreditCardService {
     
     // Fetch and update cached detail for a card
     func fetchAndUpdateCardDetail(cardKey: String) async -> CreditCardInfo? {
+        guard !cardKey.isEmpty else {
+            print("⚠️ Empty card key provided")
+            return nil
+        }
+        
         do {
             let cardDetail = try await fetchCardDetail(cardKey: cardKey)
             
-            // Update in the main cards array if it exists
-            if var cards = cachedCards, let index = cards.firstIndex(where: { $0.id == cardKey }) {
-                cards[index] = cardDetail
-                cachedCards = cards
-                saveCardsToDevice(cards)
+            // Update in the main cards array if it exists (thread-safe)
+            cacheQueue.sync {
+                if var cards = self.cachedCards, let index = cards.firstIndex(where: { $0.id == cardKey }) {
+                    cards[index] = cardDetail
+                    self.cachedCards = cards
+                    saveCardsToDevice(cards)
+                }
             }
             
             return cardDetail
@@ -315,6 +281,11 @@ class CreditCardService {
     
     // Save card detail to device storage
     private func saveCardDetailToDevice(_ card: CreditCardInfo, cardKey: String) {
+        guard !cardKey.isEmpty else {
+            print("⚠️ Cannot save card detail with empty key")
+            return
+        }
+        
         do {
             let data = try JSONEncoder().encode(card)
             let cacheInfo = CacheInfo(timestamp: Date())
@@ -330,6 +301,11 @@ class CreditCardService {
     
     // Load card detail from device storage
     private func loadCardDetailFromDevice(cardKey: String) -> CreditCardInfo? {
+        guard !cardKey.isEmpty else {
+            print("⚠️ Cannot load card detail with empty key")
+            return nil
+        }
+        
         // Check if cache exists and is valid
         guard let cacheInfoData = UserDefaults.standard.data(forKey: "\(detailCachePrefix)\(cardKey)_info"),
               let cacheInfo = try? JSONDecoder().decode(CacheInfo.self, from: cacheInfoData),
@@ -361,10 +337,14 @@ class CreditCardService {
     
     // Clear all caches (for debugging or forced refresh)
     func clearAllCaches() {
-        // Clear in-memory caches
-        cachedCards = nil
-        cachedCardDetails.removeAll()
-        imageCache.removeAll()
+        // Clear in-memory caches (thread-safe)
+        cacheQueue.sync {
+            self.cachedCards = nil
+            self.cachedCardDetails.removeAll()
+        }
+        
+        // Clear image cache
+        imageCache.removeAllObjects()
         
         // Clear device storage caches
         let userDefaults = UserDefaults.standard
@@ -378,6 +358,9 @@ class CreditCardService {
                 userDefaults.removeObject(forKey: key)
             }
         }
+        
+        // Clear disk image cache
+        clearImageCache()
         
         print("🧹 All caches cleared")
     }
@@ -426,73 +409,20 @@ class CreditCardService {
         
         print("✅ Created \(simplifiedCardInfos.count) card info objects")
         
-        // Update in-memory cache
-        self.cachedCards = simplifiedCardInfos
+        // Update in-memory cache (thread-safe)
+        cacheQueue.sync {
+            self.cachedCards = simplifiedCardInfos
+        }
         
         return simplifiedCardInfos
     }
     
-    // Add this method to the CreditCardService class
-
-    // Test method for card images
-    func testCardImage(cardKey: String) {
-        print("🧪 TESTING CARD IMAGE API FOR: \(cardKey)")
-        
-        let imageUrl = URL(string: "https://rewards-credit-card-api.p.rapidapi.com/creditcard-card-image/\(cardKey)")!
-        
-        let headers = [
-            "x-rapidapi-key": APIClient.apiKey,
-            "x-rapidapi-host": APIClient.apiHost
-        ]
-        
-        let request = NSMutableURLRequest(
-            url: imageUrl,
-            cachePolicy: .useProtocolCachePolicy,
-            timeoutInterval: 10.0
-        )
-        
-        request.httpMethod = "GET"
-        request.allHTTPHeaderFields = headers
-        
-        let session = URLSession.shared
-        let dataTask = session.dataTask(with: request as URLRequest) { (data, response, error) in
-            if let error = error {
-                print("❌ Error: \(error)")
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ Not an HTTP response")
-                return
-            }
-            
-            print("📥 HTTP Status: \(httpResponse.statusCode)")
-            
-            if let data = data {
-                print("📊 Received data size: \(data.count) bytes")
-                
-                // Try to interpret as a string
-                if let textContent = String(data: data, encoding: .utf8) {
-                    print("📝 Text content (if applicable): \(textContent)")
-                }
-                
-                // Try to create an image
-                if let image = UIImage(data: data) {
-                    print("✅ Successfully created image with size: \(image.size.width) x \(image.size.height)")
-                } else {
-                    print("❌ Failed to create image from data")
-                }
-            } else {
-                print("❌ No data received")
-            }
-        }
-        
-        dataTask.resume()
-        print("🔄 Test initiated - check console for results")
-    }
-    
     // Fetch detail for a specific card from API
     private func fetchCardDetailFromAPI(cardKey: String) async throws -> CreditCardInfo {
+        guard !cardKey.isEmpty else {
+            throw NSError(domain: "CreditCardService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Empty card key provided"])
+        }
+        
         // Make API request
         let endpoint = "/creditcard-detail-bycard/\(cardKey)"
         let response: CardDetailAPIResponse = try await APIClient.fetch(endpoint: endpoint)
@@ -505,8 +435,10 @@ class CreditCardService {
         // Convert to our model
         let detailedCard = cardDetail.toCreditCardInfo()
         
-        // Update caches
-        cachedCardDetails[cardKey] = detailedCard
+        // Update caches (thread-safe)
+        cacheQueue.sync {
+            self.cachedCardDetails[cardKey] = detailedCard
+        }
         
         return detailedCard
     }
@@ -537,8 +469,6 @@ class CreditCardService {
         }
     }
     
-    // Add this method to the CreditCardService class
-
     // Enhanced category detection from card details
     func getCategoryFromDetail(_ cardDetail: CardDetail) -> String {
         // Start with a default category
@@ -623,8 +553,6 @@ class CreditCardService {
         }
     }
     
-    
-    
     // Sample data for fallback
     func getSampleCreditCardData() -> [CreditCardInfo] {
         return [
@@ -654,17 +582,7 @@ class CreditCardService {
             )
         ]
     }
-}
-
-// Helper struct to track cache age
-private struct CacheInfo: Codable {
-    let timestamp: Date
-}
-
-
-
-// Add this extension to CreditCardService
-extension CreditCardService {
+    
     // MARK: - Card Image Caching
     
     // Image cache directory
@@ -672,9 +590,6 @@ extension CreditCardService {
         return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("card_images")
     }
     
-    
-    // Add this to the CreditCardService class or at the top of the extension
-
     // Response model for card image API
     struct CardImageResponse: Codable {
         let cardKey: String
@@ -682,19 +597,224 @@ extension CreditCardService {
         let cardImageUrl: String
     }
     
-    // Add this to the CreditCardService class or extension
-
+    // Method for fetching card images with caching
+    func fetchCardImage(for cardKey: String) async -> UIImage? {
+        guard !cardKey.isEmpty else {
+            print("⚠️ Empty card key provided")
+            return createGenericCardImage(id: "unknown")
+        }
+        
+        // First check in-memory cache
+        if let cachedImage = imageCache.object(forKey: cardKey as NSString) {
+            print("🖼️ Using in-memory cached image for \(cardKey)")
+            return cachedImage
+        }
+        
+        // Then check disk cache
+        if let diskCachedImage = loadImageFromDisk(for: cardKey) {
+            print("🖼️ Using disk cached image for \(cardKey)")
+            
+            // Store in memory cache (thread-safe)
+            DispatchQueue.main.async {
+                self.imageCache.setObject(diskCachedImage, forKey: cardKey as NSString)
+            }
+            return diskCachedImage
+        }
+        
+        print("🌐 Fetching image for card: \(cardKey)")
+        
+        // If no cache, try to get image from API
+        do {
+            // First, we need to get the URL to the actual image
+            let imageInfoUrl = URL(string: "https://rewards-credit-card-api.p.rapidapi.com/creditcard-card-image/\(cardKey)")!
+            
+            let headers = [
+                "x-rapidapi-key": APIClient.apiKey,
+                "x-rapidapi-host": APIClient.apiHost
+            ]
+            
+            var request = URLRequest(url: imageInfoUrl)
+            request.httpMethod = "GET"
+            request.allHTTPHeaderFields = headers
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Not an HTTP response for image info")
+                let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                saveToDiskCache(image: placeholderImage, for: cardKey)
+                return placeholderImage
+            }
+            
+            print("📥 Image info response status: \(httpResponse.statusCode)")
+            
+            // If we got valid JSON data, try to parse it
+            if let jsonString = String(data: data, encoding: .utf8) {
+                // Check if it's an empty array or other invalid response
+                if jsonString == "[]" || jsonString == "{}" {
+                    print("⚠️ Empty response from API")
+                    let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                    saveToDiskCache(image: placeholderImage, for: cardKey)
+                    return placeholderImage
+                }
+                
+                // Try to decode the response
+                let decoder = JSONDecoder()
+                var imageUrl: URL? = nil
+                
+                // Try to decode as array first (which seems to be the format)
+                do {
+                    if let imageResponses = try? decoder.decode([CardImageResponse].self, from: data),
+                       !imageResponses.isEmpty,
+                       let firstResponse = imageResponses.first,
+                       !firstResponse.cardImageUrl.isEmpty {
+                        imageUrl = URL(string: firstResponse.cardImageUrl)
+                        print("✅ Found image URL from array response: \(firstResponse.cardImageUrl)")
+                    }
+                    // Fallback: try to decode as a single object
+                    else if let imageResponse = try? decoder.decode(CardImageResponse.self, from: data),
+                            !imageResponse.cardImageUrl.isEmpty {
+                        imageUrl = URL(string: imageResponse.cardImageUrl)
+                        print("✅ Found image URL from single response: \(imageResponse.cardImageUrl)")
+                    }
+                } catch {
+                    print("❌ Error decoding image response: \(error)")
+                }
+                
+                // If we have a valid URL, download the actual image
+                if let imageUrl = imageUrl {
+                    do {
+                        print("📥 Downloading image from URL: \(imageUrl)")
+                        let (imageData, imageResponse) = try await URLSession.shared.data(from: imageUrl)
+                        
+                        guard let httpImageResponse = imageResponse as? HTTPURLResponse,
+                              (200...299).contains(httpImageResponse.statusCode) else {
+                            print("❌ Failed to download image from URL")
+                            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                            saveToDiskCache(image: placeholderImage, for: cardKey)
+                            return placeholderImage
+                        }
+                        
+                        if let image = UIImage(data: imageData) {
+                            print("🎉 Successfully downloaded image from URL!")
+                            
+                            // Cache the image (thread-safe)
+                            DispatchQueue.main.async {
+                                self.imageCache.setObject(image, forKey: cardKey as NSString)
+                            }
+                            saveToDiskCache(image: image, for: cardKey)
+                            return image
+                        } else {
+                            print("❌ Invalid image data from URL")
+                        }
+                    } catch {
+                        print("❌ Error downloading image from URL: \(error)")
+                    }
+                } else {
+                    print("❌ No valid image URL found in response")
+                }
+            } else {
+                print("❌ Failed to convert response to string")
+            }
+            
+            // If we couldn't get a valid image, generate a placeholder
+            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+            saveToDiskCache(image: placeholderImage, for: cardKey)
+            return placeholderImage
+        } catch {
+            print("❌ Error fetching image info: \(error)")
+            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+            saveToDiskCache(image: placeholderImage, for: cardKey)
+            return placeholderImage
+        }
+    }
+    
+    // Fallback method for fetching images from URL
+    func fetchCardImageFromURL(for url: String) async -> UIImage? {
+        guard !url.isEmpty else {
+            print("⚠️ Empty URL provided")
+            return nil
+        }
+        
+        // Check cache first (thread-safe)
+        let cacheKey = url as NSString
+        if let cachedImage = imageCache.object(forKey: cacheKey) {
+            print("🖼️ Using cached image for URL: \(url)")
+            return cachedImage
+        }
+        
+        // Check disk cache
+        if let diskCachedImage = loadImageFromDisk(for: url) {
+            print("🖼️ Using disk cached image for URL: \(url)")
+            // Store in memory cache (thread-safe)
+            DispatchQueue.main.async {
+                self.imageCache.setObject(diskCachedImage, forKey: cacheKey)
+            }
+            return diskCachedImage
+        }
+        
+        // Skip if URL is empty or invalid
+        guard let imageURL = URL(string: url) else {
+            print("❌ Invalid image URL: \(url)")
+            return nil
+        }
+        
+        print("🌐 Fetching image from URL: \(url)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: imageURL)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                print("❌ Invalid response fetching image from URL")
+                return nil
+            }
+            
+            if let image = UIImage(data: data) {
+                print("✅ Successfully loaded image from URL")
+                // Cache the image (thread-safe)
+                DispatchQueue.main.async {
+                    self.imageCache.setObject(image, forKey: cacheKey)
+                }
+                saveToDiskCache(image: image, for: url)
+                return image
+            } else {
+                print("❌ Invalid image data from URL")
+            }
+        } catch {
+            print("❌ Error fetching image from URL: \(error)")
+        }
+        
+        return nil
+    }
+    
     // Helper method to generate a placeholder image
     private func generatePlaceholderImage(for cardKey: String) async -> UIImage {
-        // Find the card info if available
-        let cardInfo: CreditCardInfo?
+        // Validate the key
+        guard !cardKey.isEmpty else {
+            return createGenericCardImage(id: "unknown")
+        }
         
-        if let existingCard = cachedCards?.first(where: { $0.id == cardKey }) {
-            cardInfo = existingCard
-        } else if let detailedCard = cachedCardDetails[cardKey] {
-            cardInfo = detailedCard
-        } else {
-            // Try to get card details if we don't have them
+        // Check if image is already in cache (thread-safe)
+        if let cachedImage = imageCache.object(forKey: cardKey as NSString) {
+            print("🖼️ Using cached placeholder image for: \(cardKey)")
+            return cachedImage
+        }
+        
+        // Find the card info if available
+        var cardInfo: CreditCardInfo?
+        
+        // Check in-memory caches (thread-safe)
+        cacheQueue.sync {
+            if let existingCard = self.cachedCards?.first(where: { $0.id == cardKey }) {
+                cardInfo = existingCard
+            } else if let detailedCard = self.cachedCardDetails[cardKey] {
+                cardInfo = detailedCard
+            }
+        }
+        
+        // If not in memory, try to get card details
+        if cardInfo == nil {
             do {
                 cardInfo = try await fetchCardDetail(cardKey: cardKey)
             } catch {
@@ -720,53 +840,71 @@ extension CreditCardService {
             return createGenericCardImage(id: cardKey)
         }
             
-        // Canvas size - credit card aspect ratio
-        let size = CGSize(width: 600, height: 380)
-        
-        // Get background color based on card category or issuer
-        let backgroundColor = getColorForCard(card)
-        
-        // Start drawing
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
-        defer { UIGraphicsEndImageContext() }
-        
-        // Draw card background with rounded corners
-        let context = UIGraphicsGetCurrentContext()!
-        let rect = CGRect(origin: .zero, size: size)
-        let roundedRect = UIBezierPath(roundedRect: rect, cornerRadius: 20)
-        
-        // Create a gradient background
-        let colors = createGradientColors(for: backgroundColor)
-        let gradient = CGGradient(
-            colorsSpace: CGColorSpaceCreateDeviceRGB(),
-            colors: colors as CFArray,
-            locations: [0.0, 1.0]
-        )!
-        
-        context.saveGState()
-        roundedRect.addClip()
-        context.drawLinearGradient(
-            gradient,
-            start: CGPoint(x: 0, y: 0),
-            end: CGPoint(x: size.width, y: size.height),
-            options: []
-        )
-        context.restoreGState()
-        
-        // Draw the card issuer logo or initial
-        drawIssuerLogo(for: card, in: context, size: size)
-        
-        // Draw card name
-        drawCardName(card.name, in: context, size: size)
-        
-        // Get the final image
-        let image = UIGraphicsGetImageFromCurrentImageContext()!
-        
-        // Cache the generated image
-        imageCache[cardKey] = image
-        print("🎨 Generated placeholder image for: \(cardKey)")
-        
-        return image
+        // Generate the image on a background thread to avoid UI blocking
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                // Canvas size - credit card aspect ratio
+                let size = CGSize(width: 600, height: 380)
+                
+                // Get background color based on card category or issuer
+                let backgroundColor = self.getColorForCard(card)
+                
+                // Start drawing
+                UIGraphicsBeginImageContextWithOptions(size, false, 0)
+                defer { UIGraphicsEndImageContext() }
+                
+                // Draw card background with rounded corners
+                guard let context = UIGraphicsGetCurrentContext() else {
+                    continuation.resume(returning: self.createGenericCardImage(id: cardKey))
+                    return
+                }
+                
+                let rect = CGRect(origin: .zero, size: size)
+                let roundedRect = UIBezierPath(roundedRect: rect, cornerRadius: 20)
+                
+                // Create a gradient background
+                let colors = self.createGradientColors(for: backgroundColor)
+                
+                guard let gradient = CGGradient(
+                    colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                    colors: colors as CFArray,
+                    locations: [0.0, 1.0]
+                ) else {
+                    continuation.resume(returning: self.createGenericCardImage(id: cardKey))
+                    return
+                }
+                
+                context.saveGState()
+                roundedRect.addClip()
+                context.drawLinearGradient(
+                    gradient,
+                    start: CGPoint(x: 0, y: 0),
+                    end: CGPoint(x: size.width, y: size.height),
+                    options: []
+                )
+                context.restoreGState()
+                
+                // Draw the card issuer logo or initial
+                self.drawIssuerLogo(for: card, in: context, size: size)
+                
+                // Draw card name
+                self.drawCardName(card.name, in: context, size: size)
+                
+                // Get the final image
+                guard let image = UIGraphicsGetImageFromCurrentImageContext() else {
+                    continuation.resume(returning: self.createGenericCardImage(id: cardKey))
+                    return
+                }
+                
+                // Cache the generated image (thread-safe)
+                DispatchQueue.main.async {
+                    self.imageCache.setObject(image, forKey: cardKey as NSString)
+                    print("🎨 Generated placeholder image for: \(cardKey)")
+                }
+                
+                continuation.resume(returning: image)
+            }
+        }
     }
 
     // Fallback method for completely unknown cards
@@ -776,7 +914,11 @@ extension CreditCardService {
         UIGraphicsBeginImageContextWithOptions(size, false, 0)
         defer { UIGraphicsEndImageContext() }
         
-        let context = UIGraphicsGetCurrentContext()!
+        guard let context = UIGraphicsGetCurrentContext() else {
+            // If we can't create an image context, return a 1x1 pixel image
+            return UIImage(systemName: "creditcard.fill") ?? UIImage()
+        }
+        
         let rect = CGRect(origin: .zero, size: size)
         let roundedRect = UIBezierPath(roundedRect: rect, cornerRadius: 20)
         
@@ -787,11 +929,13 @@ extension CreditCardService {
             blueColor.withAlphaComponent(0.8).cgColor
         ]
         
-        let gradient = CGGradient(
+        guard let gradient = CGGradient(
             colorsSpace: CGColorSpaceCreateDeviceRGB(),
             colors: colors as CFArray,
             locations: [0.0, 1.0]
-        )!
+        ) else {
+            return UIImage(systemName: "creditcard.fill") ?? UIImage()
+        }
         
         context.saveGState()
         roundedRect.addClip()
@@ -821,7 +965,10 @@ extension CreditCardService {
             withAttributes: idAttributes
         )
         
-        let image = UIGraphicsGetImageFromCurrentImageContext()!
+        guard let image = UIGraphicsGetImageFromCurrentImageContext() else {
+            return UIImage(systemName: "creditcard.fill") ?? UIImage()
+        }
+        
         return image
     }
 
@@ -951,122 +1098,12 @@ extension CreditCardService {
         subText.draw(at: subPoint, withAttributes: subAttributes)
     }
     
-    // Method for fetching card images with caching
-    func fetchCardImage(for cardKey: String) async -> UIImage? {
-        // First check in-memory cache
-        if let cachedImage = imageCache[cardKey] {
-            print("🖼️ Using in-memory cached image for \(cardKey)")
-            return cachedImage
-        }
-        
-        // Then check disk cache
-        if let diskCachedImage = loadImageFromDisk(for: cardKey) {
-            print("🖼️ Using disk cached image for \(cardKey)")
-            imageCache[cardKey] = diskCachedImage
-            return diskCachedImage
-        }
-        
-        print("🌐 Fetching image for card: \(cardKey)")
-        
-        // If no cache, try to get image from API
-        do {
-            // First, we need to get the URL to the actual image
-            let imageInfoUrl = URL(string: "https://rewards-credit-card-api.p.rapidapi.com/creditcard-card-image/\(cardKey)")!
-            
-            let headers = [
-                "x-rapidapi-key": APIClient.apiKey,
-                "x-rapidapi-host": APIClient.apiHost
-            ]
-            
-            var request = URLRequest(url: imageInfoUrl)
-            request.httpMethod = "GET"
-            request.allHTTPHeaderFields = headers
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ Not an HTTP response for image info")
-                return await generatePlaceholderImage(for: cardKey)
-            }
-            
-            print("📥 Image info response status: \(httpResponse.statusCode)")
-            
-            // If we got valid JSON data, try to parse it
-            if let jsonString = String(data: data, encoding: .utf8) {
-                // Check if it's an empty array or other invalid response
-                if jsonString == "[]" || jsonString == "{}" {
-                    print("⚠️ Empty response from API")
-                    let placeholderImage = await generatePlaceholderImage(for: cardKey)
-                    saveToDiskCache(image: placeholderImage, for: cardKey)
-                    return placeholderImage
-                }
-                
-                // Try to decode the response
-                let decoder = JSONDecoder()
-                var imageUrl: URL? = nil
-                
-                // Try to decode as array first (which seems to be the format)
-                if let imageResponses = try? decoder.decode([CardImageResponse].self, from: data),
-                   !imageResponses.isEmpty,
-                   let firstResponse = imageResponses.first,
-                   !firstResponse.cardImageUrl.isEmpty {
-                    imageUrl = URL(string: firstResponse.cardImageUrl)
-                    print("✅ Found image URL from array response: \(firstResponse.cardImageUrl)")
-                }
-                // Fallback: try to decode as a single object
-                else if let imageResponse = try? decoder.decode(CardImageResponse.self, from: data),
-                        !imageResponse.cardImageUrl.isEmpty {
-                    imageUrl = URL(string: imageResponse.cardImageUrl)
-                    print("✅ Found image URL from single response: \(imageResponse.cardImageUrl)")
-                }
-                
-                // If we have a valid URL, download the actual image
-                if let imageUrl = imageUrl {
-                    do {
-                        print("📥 Downloading image from URL: \(imageUrl)")
-                        let (imageData, imageResponse) = try await URLSession.shared.data(from: imageUrl)
-                        
-                        guard let httpImageResponse = imageResponse as? HTTPURLResponse,
-                              (200...299).contains(httpImageResponse.statusCode) else {
-                            print("❌ Failed to download image from URL")
-                            let placeholderImage = await generatePlaceholderImage(for: cardKey)
-                            saveToDiskCache(image: placeholderImage, for: cardKey)
-                            return placeholderImage
-                        }
-                        
-                        if let image = UIImage(data: imageData) {
-                            print("🎉 Successfully downloaded image from URL!")
-                            imageCache[cardKey] = image
-                            saveToDiskCache(image: image, for: cardKey)
-                            return image
-                        } else {
-                            print("❌ Invalid image data from URL")
-                        }
-                    } catch {
-                        print("❌ Error downloading image from URL: \(error)")
-                    }
-                } else {
-                    print("❌ No valid image URL found in response")
-                }
-            } else {
-                print("❌ Failed to convert response to string")
-            }
-            
-            // If we couldn't get a valid image, generate a placeholder
-            let placeholderImage = await generatePlaceholderImage(for: cardKey)
-            saveToDiskCache(image: placeholderImage, for: cardKey)
-            return placeholderImage
-        } catch {
-            print("❌ Error fetching image info: \(error)")
-            let placeholderImage = await generatePlaceholderImage(for: cardKey)
-            saveToDiskCache(image: placeholderImage, for: cardKey)
-            return placeholderImage
-        }
-    }
-    
     // Save image to disk cache
     private func saveToDiskCache(image: UIImage, for key: String) {
-        guard let directory = imageCacheDirectory else { return }
+        guard !key.isEmpty, let directory = imageCacheDirectory else {
+            print("⚠️ Cannot save image with empty key or invalid directory")
+            return
+        }
         
         // Create a safe filename from the key (works for both card keys and URLs)
         let safeFilename = createSafeFilename(from: key)
@@ -1090,7 +1127,9 @@ extension CreditCardService {
     }
     
     private func loadImageFromDisk(for key: String) -> UIImage? {
-        guard let directory = imageCacheDirectory else { return nil }
+        guard !key.isEmpty, let directory = imageCacheDirectory else {
+            return nil
+        }
         
         // Create a safe filename from the key (works for both card keys and URLs)
         let safeFilename = createSafeFilename(from: key)
@@ -1139,8 +1178,8 @@ extension CreditCardService {
     
     // Clear image cache (both memory and disk)
     func clearImageCache() {
-        // Clear memory cache
-        imageCache.removeAll()
+        // Clear memory cache (thread-safe)
+        imageCache.removeAllObjects()
         
         // Clear disk cache
         guard let directory = imageCacheDirectory else { return }
@@ -1162,11 +1201,17 @@ extension CreditCardService {
             let commonCards = ["chase-sapphire-preferred", "chase-sapphire-reserve", "amex-gold", "amex-platinum", "chase-hyatt"]
             
             for cardKey in commonCards {
-                if imageCache[cardKey] == nil && loadImageFromDisk(for: cardKey) == nil {
+                // Check if image is already in cache (thread-safe)
+                if imageCache.object(forKey: cardKey as NSString) == nil && loadImageFromDisk(for: cardKey) == nil {
                     print("🔄 Preloading image for: \(cardKey)")
                     _ = await fetchCardImage(for: cardKey)
                 }
             }
         }
     }
+}
+
+// Helper struct to track cache age
+private struct CacheInfo: Codable {
+    let timestamp: Date
 }

@@ -145,6 +145,57 @@ class CardViewModel: ObservableObject {
            return yearlyCards
        }
     
+    
+    func getTopCardsByIssuer(limit: Int = 10) -> [String: [String: [CreditCardInfo]]] {
+        // Group all cards by issuer first
+        let cardsByIssuer = Dictionary(grouping: availableCreditCards) { $0.issuer }
+        
+        var result: [String: [String: [CreditCardInfo]]] = [:]
+        
+        // Process each issuer
+        for (issuer, cards) in cardsByIssuer {
+            // For each issuer, categorize cards
+            var categorizedCards: [String: [CreditCardInfo]] = [
+                "Travel": [],
+                "Dining": [],
+                "Business": [],
+                "Misc": []
+            ]
+            
+            // Categorize each card
+            for card in cards {
+                let category = getCategoryForFiltering(card)
+                categorizedCards[category]?.append(card)
+            }
+            
+            // Sort each category by signup bonus or other criteria and limit to top cards
+            for (category, categoryCards) in categorizedCards {
+                // Sort by signup bonus (higher is better)
+                let sortedCards = categoryCards.sorted { $0.signupBonus > $1.signupBonus }
+                categorizedCards[category] = Array(sortedCards.prefix(limit))
+            }
+            
+            result[issuer] = categorizedCards
+        }
+        
+        return result
+    }
+
+    // Helper to determine the display category for a card
+    private func getCategoryForFiltering(_ card: CreditCardInfo) -> String {
+        let category = card.category.lowercased()
+        
+        if category.contains("travel") || category.contains("airline") || category.contains("hotel") {
+            return "Travel"
+        } else if category.contains("dining") || category.contains("restaurant") {
+            return "Dining"
+        } else if category.contains("business") {
+            return "Business"
+        } else {
+            return "Misc"
+        }
+    }
+    
     // MARK: - API Integration
     
     @MainActor
