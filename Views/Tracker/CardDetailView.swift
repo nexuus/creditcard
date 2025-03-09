@@ -13,6 +13,7 @@ struct CardDetailView: View {
     @State private var isRotated = false
     @State private var showingInactivateAlert = false
     @State private var showingReactivateAlert = false
+    @State private var showingEditSheet = false
     
     // Date formatter
     private let dateFormatter: DateFormatter = {
@@ -217,6 +218,16 @@ struct CardDetailView: View {
         .navigationTitle(card.name)
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showingEditSheet = true
+                }) {
+                    Image(systemName: "pencil")
+                        .foregroundColor(.blue)
+                }
+            }
+        }
         .alert("Mark Card as Inactive", isPresented: $showingInactivateAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Mark Inactive", role: .destructive) {
@@ -232,6 +243,10 @@ struct CardDetailView: View {
             }
         } message: {
             Text("This will mark the card as active again.")
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            // Show the edit card form
+            EditCardView(card: $card, viewModel: viewModel, isPresented: $showingEditSheet)
         }
     }
     
@@ -284,7 +299,7 @@ struct CardDetailView: View {
     }
 }
 
-// Supporting Views
+// Credit card visualization for the flippable card
 struct CreditCardView: View {
     var card: CreditCard
     var isBackVisible: Bool
@@ -636,5 +651,222 @@ struct QuickStatView: View {
                 .fill(colorScheme == .dark ? Color(.systemGray6) : Color.white)
                 .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
         )
+    }
+}
+
+// EditCardView struct to show when the Edit button is tapped
+struct EditCardView: View {
+    @Binding var card: CreditCard
+    @ObservedObject var viewModel: CardViewModel
+    @Binding var isPresented: Bool
+    @Environment(\.colorScheme) var colorScheme
+    
+    // Form fields
+    @State private var name: String
+    @State private var issuer: String
+    @State private var signupBonus: String
+    @State private var annualFee: String
+    @State private var notes: String
+    @State private var bonusAchieved: Bool
+    @State private var dateOpened: Date
+    
+    // Initialize with the existing card data
+    init(card: Binding<CreditCard>, viewModel: CardViewModel, isPresented: Binding<Bool>) {
+        self._card = card
+        self.viewModel = viewModel
+        self._isPresented = isPresented
+        
+        // Initialize state variables with current card values
+        self._name = State(initialValue: card.wrappedValue.name)
+        self._issuer = State(initialValue: card.wrappedValue.issuer)
+        self._signupBonus = State(initialValue: String(card.wrappedValue.signupBonus))
+        self._annualFee = State(initialValue: String(format: "%.2f", card.wrappedValue.annualFee))
+        self._notes = State(initialValue: card.wrappedValue.notes)
+        self._bonusAchieved = State(initialValue: card.wrappedValue.bonusAchieved)
+        self._dateOpened = State(initialValue: card.wrappedValue.dateOpened)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Card Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Card Details")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            FormField(
+                                icon: "creditcard",
+                                title: "Card Name",
+                                placeholder: "e.g. Sapphire Preferred",
+                                text: $name
+                            )
+                            
+                            FormField(
+                                icon: "building.columns",
+                                title: "Card Issuer",
+                                placeholder: "e.g. Chase",
+                                text: $issuer
+                            )
+                            
+                            // Date picker with custom style
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Date Opened")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                DatePicker(
+                                    "",
+                                    selection: $dateOpened,
+                                    displayedComponents: .date
+                                )
+                                .labelsHidden()
+                                .padding(.horizontal, 4)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? Color(.systemGray5) : Color.white)
+                                    .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+                            )
+                            
+                            FormField(
+                                icon: "dollarsign.circle",
+                                title: "Annual Fee",
+                                placeholder: "e.g. 95",
+                                text: $annualFee,
+                                keyboardType: .decimalPad,
+                                prefix: "$"
+                            )
+                        }
+                        
+                        // Bonus Details Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Bonus Details")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            FormField(
+                                icon: "star",
+                                title: "Signup Bonus Points",
+                                placeholder: "e.g. 60000",
+                                text: $signupBonus,
+                                keyboardType: .numberPad
+                            )
+                            
+                            // Toggle with custom style
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Bonus Achieved")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Toggle("Bonus Achieved", isOn: $bonusAchieved)
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
+                                    .padding(.horizontal, 4)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? Color(.systemGray5) : Color.white)
+                                    .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+                            )
+                        }
+                        
+                        // Notes Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Notes")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Additional Details")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                TextEditor(text: $notes)
+                                    .frame(minHeight: 120)
+                                    .padding(4)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? Color(.systemGray5) : Color.white)
+                                    .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+                            )
+                        }
+                        
+                        // Save Button
+                        Button(action: {
+                            saveCardChanges()
+                        }) {
+                            Text("Save Changes")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(isFormValid ? Color.blue : Color.gray)
+                                )
+                        }
+                        .disabled(!isFormValid)
+                        .padding(.vertical, 10)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Edit Card")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check if the form is valid
+    private var isFormValid: Bool {
+        return !name.isEmpty && !issuer.isEmpty
+    }
+    
+    // Save the edited card
+    private func saveCardChanges() {
+        // Create an updated version of the card
+        var updatedCard = card
+        updatedCard.name = name
+        updatedCard.issuer = issuer
+        updatedCard.dateOpened = dateOpened
+        updatedCard.signupBonus = Int(signupBonus) ?? 0
+        updatedCard.bonusAchieved = bonusAchieved
+        updatedCard.annualFee = Double(annualFee) ?? 0.0
+        updatedCard.notes = notes
+        
+        // Update in the ViewModel
+        viewModel.updateCard(updatedCard) { success in
+            if success {
+                // Update the binding to reflect changes in the parent view
+                self.card = updatedCard
+                
+                // Close the sheet
+                isPresented = false
+                
+                // Haptic feedback for success
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            } else {
+                // Haptic feedback for failure
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.error)
+            }
+        }
     }
 }

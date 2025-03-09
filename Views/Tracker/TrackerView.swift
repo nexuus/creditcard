@@ -47,6 +47,13 @@ struct TrackerView: View {
                             .padding(.bottom, 4)
                             
                             // Active cards - HORIZONTAL SCROLLING LAYOUT
+                            // Active cards section with horizontal scrolling
+                            // Replace this section in your TrackerView.swift file:
+                            
+                            // Active cards section with horizontal scrolling
+                            // Replace this section in your TrackerView.swift file:
+                            
+                            // Active cards section with horizontal scrolling
                             if viewModel.getActiveCards().isEmpty {
                                 // Empty state for active cards
                                 VStack(spacing: 20) {
@@ -69,19 +76,27 @@ struct TrackerView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 30)
                             } else {
-                                // Horizontal scrolling cards
+                                // Improved scrolling cards layout using the CreditCardView style
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 16) {
+                                        // Extra spacing at start for visual balance
+                                        Spacer()
+                                            .frame(width: 8)
+                                        
                                         ForEach(viewModel.getActiveCards()) { card in
                                             NavigationLink(destination: CardDetailView(card: card, viewModel: viewModel)) {
                                                 HorizontalCardView(card: card, viewModel: viewModel)
                                             }
                                             .buttonStyle(CardButtonStyle())
                                         }
+                                        
+                                        // Extra spacing at end for visual balance
+                                        Spacer()
+                                            .frame(width: 8)
                                     }
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 12)
+                                    .padding(.vertical, 12)
                                 }
+                                .clipShape(Rectangle())
                                 .padding(.vertical, 8)
                             }
                             
@@ -210,141 +225,125 @@ struct TrackerView: View {
     }
 }
 
-// New Horizontal Card View for active cards
+// Updated HorizontalCardView using the same style as CreditCardView
+// Updated HorizontalCardView using the same style as CreditCardView
 struct HorizontalCardView: View {
     var card: CreditCard
     var viewModel: CardViewModel
-    @Environment(\.colorScheme) var colorScheme
+    @State private var isPressed = false
     
     var body: some View {
-        // Card container
+        // Use a modified version of CreditCardView but always show the front
         ZStack {
-            // Card background with gradient based on issuer
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            getCardPrimaryColor(for: card.issuer),
-                            getCardSecondaryColor(for: card.issuer)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: getCardPrimaryColor(for: card.issuer).opacity(0.4),
-                        radius: 10, x: 0, y: 5)
+            // Extra spacer to ensure corners aren't clipped
+            Color.clear
             
-            // Card content with proper alignment
-            VStack(alignment: .center, spacing: 12) {
-                // Top row with issuer logo and card type
-                HStack(alignment: .center) {
-                    // Issuer circle - with proper centering
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 40, height: 40)
+            // Card front - adapted from CreditCardView
+            ZStack(alignment: .topLeading) {
+                // Background with authentic credit card styling
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                getCardPrimaryColor(for: card.issuer).opacity(0.9),
+                                getCardPrimaryColor(for: card.issuer)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        // Add subtle pattern overlay for authenticity
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: getCardPrimaryColor(for: card.issuer).opacity(0.5), radius: 10, x: 0, y: 5)
+                
+                // Card content with proper credit card layout
+                VStack(alignment: .leading) {
+                    // Top section with chip and issuer
+                    HStack(alignment: .center, spacing: 8) {
+                        // Chip
+                        Rectangle()
+                            .fill(Color.yellow.opacity(0.8))
+                            .frame(width: 45, height: 35)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.yellow.opacity(0.5), lineWidth: 1)
+                            )
                         
-                        Text(String(card.issuer.prefix(1)))
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 40, height: 40)
-                            .multilineTextAlignment(.center)
+                        Spacer()
+                        
+                        // Issuer logo/text and status badge in a vertical stack
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(card.issuer.uppercased())
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            // Bonus status badge
+                            if !viewModel.isLoadingCardStatus {
+                                Text(card.bonusAchieved ? "EARNED" : "PENDING")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(card.bonusAchieved ? Color.green.opacity(0.3) : Color.yellow.opacity(0.3))
+                                    )
+                                    .foregroundColor(.white)
+                            }
+                        }
                     }
                     
                     Spacer()
                     
-                    // Card type chip - with better padding and alignment
-                    Text(card.issuer)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(12)
-                        .multilineTextAlignment(.center)
-                }
-                
-                // Center spacer to push content apart
-                Spacer()
-                
-                // Centered card name
-                Text(card.name)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                
-                // Card details - evenly spaced with better alignment
-                HStack(alignment: .center) {
-                    // Annual fee section - aligned center
-                    VStack(alignment: .center, spacing: 4) {
-                        Text("ANNUAL FEE")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                        
-                        Text("$\(Int(card.annualFee))")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
+                    // Card number placeholders
+                    HStack(spacing: 20) {
+                        ForEach(0..<4, id: \.self) { i in
+                            Text(i == 3 ? "•••• 1234" : "••••")
+                                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
                     
-                    // Bonus section - aligned center
-                    VStack(alignment: .center, spacing: 4) {
-                        Text("BONUS")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                        
-                        Text("\(formattedNumber(card.signupBonus))")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                
-                // Status indicator - properly centered
-                if !viewModel.isLoadingCardStatus {
-                    Button(action: {
-                        withAnimation(.spring()) {
-                            viewModel.toggleBonusAchieved(for: card.id) { success in
-                                if !success {
-                                    let errorGenerator = UINotificationFeedbackGenerator()
-                                    errorGenerator.notificationOccurred(.error)
-                                }
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Text(card.bonusAchieved ? "EARNED" : "PENDING")
-                                .font(.system(size: 12, weight: .bold))
-                                .multilineTextAlignment(.center)
+                    Spacer()
+                    
+                    // Bottom row with name and sign-up bonus
+                    HStack {
+                        // Card name
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("CARD NAME")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
                             
-                            Image(systemName: card.bonusAchieved ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 12))
+                            Text(card.name)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(card.bonusAchieved
-                                      ? Color.green.opacity(0.3)
-                                      : Color.yellow.opacity(0.3))
-                        )
-                        .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        // Sign-up bonus
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("BONUS")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            Text("\(formattedNumber(card.signupBonus))")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .frame(maxWidth: .infinity, alignment: .center)
                 }
+                .padding()
             }
-            .padding()
         }
-        .frame(width: 300, height: 190)
+        .frame(width: 340, height: 185)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        // Remove the direct tap gesture since we're using NavigationLink
     }
     
     // Format large numbers with commas
@@ -354,7 +353,7 @@ struct HorizontalCardView: View {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
     
-    // Get vibrant primary color based on issuer
+    // Get color based on issuer - keep this identical to CreditCardView
     func getCardPrimaryColor(for issuer: String) -> Color {
         switch issuer.lowercased() {
         case "chase":
@@ -374,37 +373,20 @@ struct HorizontalCardView: View {
         case "barclays":
             return Color(red: 0.15, green: 0.67, blue: 0.88) // Sky blue
         default:
+            // Generate a nice color based on the issuer name
             let hash = issuer.hash
             let hue = Double(abs(hash) % 256) / 256.0
             return Color(hue: hue, saturation: 0.7, brightness: 0.9)
         }
     }
-    
-    // Get a complementary secondary color
-    func getCardSecondaryColor(for issuer: String) -> Color {
-        let primary = getCardPrimaryColor(for: issuer)
-        
-        // Extract the primary color components and create a complementary gradient color
-        var hue: CGFloat = 0
-        var saturation: CGFloat = 0
-        var brightness: CGFloat = 0
-        var alpha: CGFloat = 0
-        
-        UIColor(primary).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        
-        // Adjust hue slightly for a nice gradient (not too contrasting)
-        let newHue = fmod(hue + 0.05, 1.0)
-        
-        return Color(hue: Double(newHue), saturation: Double(saturation * 0.9), brightness: Double(brightness * 0.85))
-    }
 }
-
-// Custom button style for card interactions
+    
+// Enhanced CardButtonStyle with better animation
 struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .brightness(configuration.isPressed ? -0.05 : 0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
