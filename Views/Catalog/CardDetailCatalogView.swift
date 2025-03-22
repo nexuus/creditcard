@@ -70,8 +70,8 @@ struct CardDetailCatalogView: View {
                             .fontWeight(.medium)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(AppTheme.Colors.categoryColor(for: displayCard.category).opacity(0.15))
-                            .foregroundColor(AppTheme.Colors.categoryColor(for: displayCard.category))
+                            .background(CardCategoryManager.shared.colorForCategory(displayCard.category).opacity(0.15))
+                            .foregroundColor(CardCategoryManager.shared.colorForCategory(displayCard.category))
                             .cornerRadius(20)
                             .padding(.top, 8)
                     }
@@ -304,7 +304,7 @@ struct CardDetailCatalogView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text(group)
                                         .font(AppTheme.Typography.headline)
-                                        .foregroundColor(AppTheme.Colors.categoryColor(for: group))
+                                        .foregroundColor(CardCategoryManager.shared.colorForCategory(group))
                                     
                                     ForEach(Array(categories.sorted(by: { $0.earnMultiplier > $1.earnMultiplier })), id: \.id) { category in
                                         BonusCategoryRow(category: category)
@@ -369,7 +369,7 @@ struct CardDetailCatalogView: View {
         isLoadingImage = true
         
         Task {
-            if let image = await CreditCardService.shared.fetchCardImage(for: card.id) {
+            if let image = await CreditCardService.shared.fetchCardImageEnhanced(for: card.id, card: card) {
                 await MainActor.run {
                     withAnimation {
                         self.cardImage = image
@@ -383,6 +383,7 @@ struct CardDetailCatalogView: View {
             }
         }
     }
+
     
     // Format points with comma separators
     private func formattedNumber(_ number: Int) -> String {

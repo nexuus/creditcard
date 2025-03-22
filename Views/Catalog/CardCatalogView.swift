@@ -49,7 +49,7 @@ struct CardCatalogView: View {
                                 action: { selectedBank = nil }
                             )
                             
-                            ForEach(availableBanks, id: \.self) { bank in
+                            ForEach(availableCategories, id: \.self) { bank in
                                 CategoryButton(
                                     title: bank,
                                     isSelected: selectedBank == bank,
@@ -123,9 +123,8 @@ struct CardCatalogView: View {
     }
     
     // Available banks for filtering
-    private var availableBanks: [String] {
-        // Only show specified popular banks
-        return ["Chase", "Wells Fargo", "Citi", "American Express", "Capital One", "Barclays US", "Bank of America", "Discover"]
+    private var availableCategories: [String] {
+        return CardCategoryManager.shared.getAllCategories()
     }
     
     // Method to refresh the card catalog
@@ -206,7 +205,7 @@ struct OrganizedCatalogView: View {
         ScrollView {
             VStack(spacing: 20) {
                 // Using the new method to avoid ambiguity
-                let topCardsByBank = viewModel.getPopularCardsByIssuer(limit: 10)
+                let topCardsByBank = viewModel.getCardsFromMajorIssuers(limit: 10)
                 
                 // Filter to only show popular banks
                 let filteredBanks = topCardsByBank.keys.filter { bank in
@@ -510,7 +509,7 @@ struct CompactCardView: View {
         isLoadingImage = true
         
         Task {
-            if let image = await CreditCardService.shared.fetchCardImage(for: card.id) {
+            if let image = await CreditCardService.shared.fetchCardImageEnhanced(for: card.id, card: card) {
                 await MainActor.run {
                     self.cardImage = image
                     self.isLoadingImage = false
@@ -522,6 +521,7 @@ struct CompactCardView: View {
             }
         }
     }
+
     
     // Format large numbers with commas
     private func formattedNumber(_ number: Int) -> String {
@@ -530,20 +530,8 @@ struct CompactCardView: View {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
     
-    // Get color based on card category
     private func getCategoryColor(for category: String) -> Color {
-        switch category.lowercased() {
-        case "travel", "airline", "hotel":
-            return Color.blue
-        case "dining", "restaurant":
-            return Color.orange
-        case "business":
-            return Color.purple
-        case "cashback":
-            return Color.green
-        default:
-            return Color.gray
-        }
+        return CardCategoryManager.shared.colorForCategory(category)
     }
 }
 

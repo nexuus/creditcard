@@ -1,16 +1,10 @@
-//
-//  CardViewModel.swift
-//  CreditCardTracker
-//
-//  Created by Hassan  on 2/26/25.
-//
-
-// System frameworks first
 import SwiftUI
 import Foundation
 import Combine
 
+// MARK: - CardViewModel
 class CardViewModel: ObservableObject {
+    // MARK: - Published Properties
     @Published var cards: [CreditCard] = []
     @Published var availableCreditCards: [CreditCardInfo] = []
     @Published var popularCreditCards: [CreditCardInfo] = []
@@ -18,6 +12,8 @@ class CardViewModel: ObservableObject {
     @Published var isLoadingDetails: Bool = false
     @Published var apiLoadingError: String? = nil
     @Published var isLoadingCardStatus: Bool = true
+    
+    // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     
     // List of major banks to show by default
@@ -41,13 +37,9 @@ class CardViewModel: ObservableObject {
         "Travel", "Cashback", "Hotel", "Airline", "Groceries", "Dining", "Gas"
     ]
     
+    // MARK: - Initialization
     init() {
         loadSampleData() // Keep for fallback
-        
-        // Load card catalog from API on startup
-        Task {
-            await loadCreditCardsFromAPI()
-        }
         
         // Subscribe to user login changes
         UserService.shared.$isLoggedIn
@@ -64,20 +56,57 @@ class CardViewModel: ObservableObject {
         }
     }
     
-    // MARK: - User Card Management
-    
+    // Initialize with loading state
+    func initializeWithLoadingState() {
+        // Set loading state to true
+        isLoadingCardStatus = true
         
-        // Get active cards only
-        func getActiveCards() -> [CreditCard] {
-            return cards.filter { $0.isActive }
+        // Perform loading on background thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Load cards
+            let loadedCards = self.loadCardsWithPriority()
+            
+            // Update on main thread
+            DispatchQueue.main.async {
+                self.cards = loadedCards
+                // Turn off loading state
+                self.isLoadingCardStatus = false
+                print("✅ Card loading complete with \(self.cards.count) cards")
+            }
+        }
+    }
+    
+    // Optimized loading method that prioritizes card status
+    private func loadCardsWithPriority() -> [CreditCard] {
+        print("🔄 Loading cards with priority...")
+        
+        // First try to load from UserDefaults directly as it's fastest
+        if let localCards = loadCardsDirectlyFromDefaults() {
+            print("📦 Loaded \(localCards.count) cards directly from UserDefaults")
+            return localCards
         }
         
-        // Get inactive cards only
-        func getInactiveCards() -> [CreditCard] {
-            return cards.filter { !$0.isActive }
+        // Then try user account if logged in
+        if let user = UserService.shared.currentUser {
+            print("👤 Loaded \(user.cards.count) cards from user account")
+            return user.cards
         }
+        
+        // Fall back to local storage (might be redundant but keeping for safety)
+        if let localCards = loadCardsLocally() {
+            print("💾 Loaded \(localCards.count) cards from local storage")
+            return localCards
+        }
+        
+        // Last resort: sample data
+        print("⚠️ Using sample data")
+        var sampleCards: [CreditCard] = []
+        loadSampleData()
+        sampleCards = self.cards
+        return sampleCards
+    }
     
-    
+    // Load sample data for fallback
     func loadSampleData() {
         cards = [
             CreditCard(name: "Sapphire Preferred", issuer: "Chase", dateOpened: Date().addingTimeInterval(-180*24*3600), signupBonus: 60000, bonusAchieved: true, annualFee: 95, notes: "Met spending requirement in month 2"),
@@ -85,129 +114,271 @@ class CardViewModel: ObservableObject {
             CreditCard(name: "Venture X", issuer: "Capital One", dateOpened: Date().addingTimeInterval(-30*24*3600), signupBonus: 100000, bonusAchieved: false, annualFee: 395, notes: "Need to complete $10k spend")
         ]
     }
+}
+
+// MARK: - Card Data Management
+extension CardViewModel {
+    // Get active cards only
+    func getActiveCards() -> [CreditCard] {
+        return cards.filter { $0.isActive }
+    }
     
+    // Get inactive cards only
+    func getInactiveCards() -> [CreditCard] {
+        return cards.filter { !$0.isActive }
+    }
+    
+    // Add a new card
     func addCard(_ card: CreditCard) {
         cards.append(card)
         saveCards()
     }
     
+    // Delete card at specific index
     func deleteCard(at offsets: IndexSet) {
         cards.remove(atOffsets: offsets)
         saveCards()
     }
     
-    
-    func totalHistoricalPoints() -> Int {
-            return cards.filter { $0.bonusAchieved }.reduce(0) { $0 + $1.signupBonus }
-        }
-    // MARK: - Points and Statistics
-    
-    func totalPointsEarned() -> Int {
-            return cards.filter { $0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
-        }
-    
-    func pendingPoints() -> Int {
-            return cards.filter { !$0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
-        }
-    
-    func pointsByYear() -> [String: Int] {
-            let calendar = Calendar.current
-            var yearlyPoints: [String: Int] = [:]
-            
-            for card in cards where card.bonusAchieved {
-                let year = calendar.component(.year, from: card.dateOpened)
-                let yearString = String(year)
-                yearlyPoints[yearString, default: 0] += card.signupBonus
+    // Load user cards
+    func loadUserCards() {
+        // Set loading state first
+        isLoadingCardStatus = true
+        
+        // A brief artificial delay to ensure UI shows the loading state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let user = UserService.shared.currentUser {
+                self.cards = user.cards
+                print("📤 Loaded \(self.cards.count) cards from user account")
+            } else {
+                // Try to load from local storage if not logged in
+                if let localCards = self.loadCardsLocally() {
+                    self.cards = localCards
+                    print("📤 Loaded \(self.cards.count) cards from local storage")
+                } else {
+                    self.loadSampleData()
+                }
             }
             
-            return yearlyPoints
+            // Turn off loading state
+            self.isLoadingCardStatus = false
+        }
+    }
+    
+    // Update an existing card with completion handler
+    func updateCard(_ card: CreditCard, completion: ((Bool) -> Void)? = nil) {
+        // Ensure we're on the main thread for UI operations
+        DispatchQueue.main.async {
+            if let index = self.cards.firstIndex(where: { $0.id == card.id }) {
+                // Update card in the array
+                self.cards[index] = card
+                
+                // Attempt to save changes
+                let success = self.saveCards()
+                
+                // Force UI refresh
+                self.objectWillChange.send()
+                
+                if success {
+                    print("✅ Successfully updated card: \(card.name)")
+                    completion?(true)
+                } else {
+                    print("❌ Error updating card: \(card.name)")
+                    // Revert change if save failed
+                    if let oldCards = UserService.shared.loadCardsDirectly() {
+                        self.cards = oldCards
+                    }
+                    completion?(false)
+                }
+            } else {
+                print("⚠️ Card not found in array: \(card.id)")
+                completion?(false)
+            }
+        }
+    }
+    
+    // Toggle bonus achieved status
+    func toggleBonusAchieved(for cardID: UUID, completion: ((Bool) -> Void)? = nil) {
+        // Ensure we're on the main thread
+        DispatchQueue.main.async {
+            if let index = self.cards.firstIndex(where: { $0.id == cardID }) {
+                // Create a copy of the card
+                var updatedCard = self.cards[index]
+                
+                // Toggle the status
+                updatedCard.bonusAchieved.toggle()
+                
+                // Update the card in the array
+                self.cards[index] = updatedCard
+                
+                // CRITICAL: Force save to UserDefaults immediately
+                self.saveCards()
+                
+                // Force UserDefaults to synchronize
+                UserDefaults.standard.synchronize()
+                
+                // Provide feedback
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+                
+                // Log the change
+                let status = updatedCard.bonusAchieved ? "earned" : "pending"
+                print("💾 Card status changed: \(updatedCard.name) marked as \(status)")
+                
+                completion?(true)
+            } else {
+                print("⚠️ Card not found for toggle: \(cardID)")
+                completion?(false)
+            }
+        }
+    }
+    
+    // Save cards to storage
+    func saveCards() -> Bool {
+        do {
+            if UserService.shared.isLoggedIn {
+                UserService.shared.updateUserCards(cards: cards)
+            } else {
+                // Save locally if not logged in
+                if !saveCardsLocally() {
+                    return false
+                }
+            }
+            
+            // Set timestamp for last update
+            UserDefaults.standard.set(Date(), forKey: "lastDataUpdate")
+            return true
+        } catch {
+            print("❌ Error in saveCards: \(error)")
+            return false
+        }
+    }
+    
+    // Save cards locally
+    func saveCardsLocally() -> Bool {
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(cards)
+            UserDefaults.standard.set(data, forKey: "savedCards")
+            
+            print("💾 Cards saved locally: \(cards.count) cards")
+            return true
+        } catch {
+            print("❌ Error saving cards locally: \(error)")
+            return false
+        }
+    }
+    
+    // Load cards from local storage
+    private func loadCardsLocally() -> [CreditCard]? {
+        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
+            return nil
         }
         
+        do {
+            let decoder = JSONDecoder()
+            let loadedCards = try decoder.decode([CreditCard].self, from: data)
+            
+            print("📤 Loaded \(loadedCards.count) cards from local storage")
+            return loadedCards
+        } catch {
+            print("❌ Error loading cards locally: \(error)")
+            return nil
+        }
+    }
+    
+    // Direct UserDefaults access for speed
+    private func loadCardsDirectlyFromDefaults() -> [CreditCard]? {
+        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
+            return nil
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            let cards = try decoder.decode([CreditCard].self, from: data)
+            return cards
+        } catch {
+            print("❌ Error in direct UserDefaults loading: \(error)")
+            return nil
+        }
+    }
+}
 
+// MARK: - Statistics and Metrics
+extension CardViewModel {
+    // Calculate total historical points (all cards)
+    func totalHistoricalPoints() -> Int {
+        return cards.filter { $0.bonusAchieved }.reduce(0) { $0 + $1.signupBonus }
+    }
+    
+    // Calculate total points earned (active cards)
+    func totalPointsEarned() -> Int {
+        return cards.filter { $0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
+    }
+    
+    // Calculate pending points (active cards)
+    func pendingPoints() -> Int {
+        return cards.filter { !$0.bonusAchieved && $0.isActive }.reduce(0) { $0 + $1.signupBonus }
+    }
+    
+    // Group points by year
+    func pointsByYear() -> [String: Int] {
+        let calendar = Calendar.current
+        var yearlyPoints: [String: Int] = [:]
+        
+        for card in cards where card.bonusAchieved {
+            let year = calendar.component(.year, from: card.dateOpened)
+            let yearString = String(year)
+            yearlyPoints[yearString, default: 0] += card.signupBonus
+        }
+        
+        return yearlyPoints
+    }
+    
+    // Calculate lifetime points
     func lifetimePoints() -> Int {
         return totalPointsEarned()
     }
-
+    
+    // Calculate total annual fees (active cards)
     func totalAnnualFees() -> Double {
-           return cards.filter { $0.isActive }.reduce(0) { $0 + $1.annualFee }
-       }
-
+        return cards.filter { $0.isActive }.reduce(0) { $0 + $1.annualFee }
+    }
+    
+    // Group cards opened by year
     func cardsOpenedByYear() -> [String: Int] {
-           let calendar = Calendar.current
-           var yearlyCards: [String: Int] = [:]
-           
-           for card in cards {
-               let year = calendar.component(.year, from: card.dateOpened)
-               let yearString = String(year)
-               yearlyCards[yearString, default: 0] += 1
-           }
-           
-           return yearlyCards
-       }
-    
-    
-    func getTopCardsByIssuer(limit: Int = 10) -> [String: [String: [CreditCardInfo]]] {
-        // Group all cards by issuer first
-        let cardsByIssuer = Dictionary(grouping: availableCreditCards) { $0.issuer }
+        let calendar = Calendar.current
+        var yearlyCards: [String: Int] = [:]
         
-        var result: [String: [String: [CreditCardInfo]]] = [:]
-        
-        // Process each issuer
-        for (issuer, cards) in cardsByIssuer {
-            // For each issuer, categorize cards
-            var categorizedCards: [String: [CreditCardInfo]] = [
-                "Travel": [],
-                "Dining": [],
-                "Business": [],
-                "Misc": []
-            ]
-            
-            // Categorize each card
-            for card in cards {
-                let category = getCategoryForFiltering(card)
-                categorizedCards[category]?.append(card)
-            }
-            
-            // Sort each category by signup bonus or other criteria and limit to top cards
-            for (category, categoryCards) in categorizedCards {
-                // Sort by signup bonus (higher is better)
-                let sortedCards = categoryCards.sorted { $0.signupBonus > $1.signupBonus }
-                categorizedCards[category] = Array(sortedCards.prefix(limit))
-            }
-            
-            result[issuer] = categorizedCards
+        for card in cards {
+            let year = calendar.component(.year, from: card.dateOpened)
+            let yearString = String(year)
+            yearlyCards[yearString, default: 0] += 1
         }
         
-        return result
+        return yearlyCards
     }
+}
 
-    // Helper to determine the display category for a card
-    private func getCategoryForFiltering(_ card: CreditCardInfo) -> String {
-        let category = card.category.lowercased()
-        
-        if category.contains("travel") || category.contains("airline") || category.contains("hotel") {
-            return "Travel"
-        } else if category.contains("dining") || category.contains("restaurant") {
-            return "Dining"
-        } else if category.contains("business") {
-            return "Business"
-        } else {
-            return "Misc"
-        }
-    }
-    
-    // MARK: - API Integration
-    
+// MARK: - API Integration
+extension CardViewModel {
+    // Load credit cards from API with clear naming to avoid ambiguity
     @MainActor
-    func loadCreditCardsFromAPI() async {
+    func loadCreditCardsFromAPI(forceRefresh: Bool = false) async {
         isLoadingCards = true
         apiLoadingError = nil
         
         do {
-            print("📊 Fetching comprehensive credit card catalog...")
-            // Using the comprehensive method to fetch all cards
-            availableCreditCards = try await CreditCardService.shared.fetchComprehensiveCardCatalog()
-            print("✅ Successfully loaded \(availableCreditCards.count) cards from API")
+            if forceRefresh {
+                // Clear caches if force refresh is requested
+                print("🔄 Force refreshing card data...")
+                CreditCardService.shared.clearAllCaches()
+            }
+            
+            print("📊 Fetching credit card catalog...")
+            // Use enhanced fetching method with caching
+            availableCreditCards = try await CreditCardService.shared.fetchCreditCards()
+            print("✅ Successfully loaded \(availableCreditCards.count) cards")
             
             // Filter out the popular cards
             filterPopularCards()
@@ -221,12 +392,25 @@ class CardViewModel: ObservableObject {
             // If we fail to load cards, check if we have any cached
             if availableCreditCards.isEmpty {
                 // Fall back to sample data if no cards are available
-                availableCreditCards = getSampleCreditCards()
+                availableCreditCards = CreditCardService.shared.getSampleCreditCardData()
                 popularCreditCards = availableCreditCards // For sample data, use all cards
                 print("⚠️ Using \(availableCreditCards.count) sample cards as fallback")
             }
         }
         
+        isLoadingCards = false
+    }
+    
+    // Force-refresh all data
+    @MainActor
+    func refreshAllData() async {
+        // Show loading indicator
+        isLoadingCards = true
+        
+        // Force refresh from API
+        await loadCreditCardsFromAPI(forceRefresh: true)
+        
+        // Hide loading indicator
         isLoadingCards = false
     }
     
@@ -333,6 +517,19 @@ class CardViewModel: ObservableObject {
         print("✅ Prefetched details for top popular cards")
     }
     
+    // Fetch card details with caching
+    @MainActor
+    func getCardDetails(for cardId: String) async -> CreditCardInfo? {
+        // Check if we already have a detailed card
+        if let existingCard = availableCreditCards.first(where: { $0.id == cardId && $0.benefits != nil }) {
+            return existingCard
+        }
+        
+        // Otherwise fetch the details with caching
+        return await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: cardId)
+    }
+    
+    // Search credit cards by term
     func searchCreditCards(searchTerm: String) -> [CreditCardInfo] {
         if searchTerm.isEmpty {
             return popularCreditCards
@@ -343,12 +540,14 @@ class CardViewModel: ObservableObject {
             card.issuer.localizedCaseInsensitiveContains(searchTerm)
         }
     }
-    
+}
+
+// MARK: - Card Recommendations and Organization
+extension CardViewModel {
+    // Get credit cards by category
     func getCreditCardsByCategory() -> [String: [CreditCardInfo]] {
         Dictionary(grouping: availableCreditCards) { $0.category }
     }
-    
-    // MARK: - Card Recommendations
     
     // Get recommended cards based on a category
     func getRecommendedCards(for category: String, limit: Int = 5) -> [CreditCardInfo] {
@@ -378,8 +577,92 @@ class CardViewModel: ObservableObject {
         return Array(sortedCards.prefix(limit))
     }
     
-    // MARK: - Testing Methods
+    // Function to get top cards by issuer - organized by category
+    func getTopCardsByIssuerCategorized(limit: Int = 10) -> [String: [String: [CreditCardInfo]]] {
+        // Group all cards by issuer first
+        let cardsByIssuer = Dictionary(grouping: availableCreditCards) { $0.issuer }
+        
+        var result: [String: [String: [CreditCardInfo]]] = [:]
+        
+        // Process each issuer
+        for (issuer, cards) in cardsByIssuer {
+            // For each issuer, categorize cards
+            var categorizedCards: [String: [CreditCardInfo]] = [
+                "Travel": [],
+                "Dining": [],
+                "Business": [],
+                "Misc": []
+            ]
+            
+            // Categorize each card
+            for card in cards {
+                let category = getCategoryForFiltering(card)
+                categorizedCards[category]?.append(card)
+            }
+            
+            // Sort each category by signup bonus or other criteria and limit to top cards
+            for (category, categoryCards) in categorizedCards {
+                // Sort by signup bonus (higher is better)
+                let sortedCards = categoryCards.sorted { $0.signupBonus > $1.signupBonus }
+                categorizedCards[category] = Array(sortedCards.prefix(limit))
+            }
+            
+            result[issuer] = categorizedCards
+        }
+        
+        return result
+    }
     
+    // Get popular cards from major issuers
+    func getCardsFromMajorIssuers(limit: Int = 10) -> [String: [CreditCardInfo]] {
+        // Popular banks to filter
+        let popularBanks = ["Chase", "Wells Fargo", "Citi", "American Express", "Amex", "Capital One", "Barclays", "Barclays US", "Bank of America", "Discover"]
+        
+        // Group all cards by issuer first
+        let cardsByIssuer = Dictionary(grouping: availableCreditCards) { $0.issuer }
+        
+        var result: [String: [CreditCardInfo]] = [:]
+        
+        // Process each issuer
+        for (issuer, cards) in cardsByIssuer {
+            // Skip issuers that aren't in our popular banks list
+            let isPopularBank = popularBanks.contains { popularBank in
+                issuer.lowercased().contains(popularBank.lowercased())
+            }
+            
+            if !isPopularBank {
+                continue
+            }
+            
+            // Sort all cards for this issuer by popularity (using signup bonus as a proxy)
+            let sortedCards = cards.sorted { $0.signupBonus > $1.signupBonus }
+            
+            // Take only the top cards
+            result[issuer] = Array(sortedCards.prefix(limit))
+        }
+        
+        return result
+    }
+    
+    // Helper to determine the display category for a card
+    private func getCategoryForFiltering(_ card: CreditCardInfo) -> String {
+        let category = card.category.lowercased()
+        
+        if category.contains("travel") || category.contains("airline") || category.contains("hotel") {
+            return "Travel"
+        } else if category.contains("dining") || category.contains("restaurant") {
+            return "Dining"
+        } else if category.contains("business") {
+            return "Business"
+        } else {
+            return "Misc"
+        }
+    }
+}
+
+// MARK: - Testing and Debug Methods
+extension CardViewModel {
+    // Test method to test search API
     func testSearchAPI() async {
         print("🧪 TESTING CARD SEARCH API")
         isLoadingCards = true
@@ -461,7 +744,7 @@ class CardViewModel: ObservableObject {
     }
     
     // Provide some sample cards in case API fails
-    private func getSampleCreditCards() -> [CreditCardInfo] {
+    func getSampleCreditCards() -> [CreditCardInfo] {
         return [
             CreditCardInfo(
                 id: "chase-sapphire-reserve",
@@ -525,237 +808,7 @@ class CardViewModel: ObservableObject {
             )
         ]
     }
-}
-
-extension CardViewModel {
-    // Do NOT redeclare toggleBonusAchieved - instead add these supporting methods
     
-    // Load cards locally from UserDefaults
-    private func loadCardsLocally() -> [CreditCard]? {
-        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
-            return nil
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            let loadedCards = try decoder.decode([CreditCard].self, from: data)
-            
-            print("📤 Loaded \(loadedCards.count) cards from local storage")
-            return loadedCards
-        } catch {
-            print("❌ Error loading cards locally: \(error)")
-            return nil
-        }
-    }
-    
-    // Enhanced load user cards method with fallback to local storage
-    func loadUserCards() {
-        // Set loading state first
-        isLoadingCardStatus = true
-        
-        // A brief artificial delay to ensure UI shows the loading state
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if let user = UserService.shared.currentUser {
-                self.cards = user.cards
-                print("📤 Loaded \(self.cards.count) cards from user account")
-            } else {
-                // Try to load from local storage if not logged in
-                if let localCards = self.loadCardsLocally() {
-                    self.cards = localCards
-                    print("📤 Loaded \(self.cards.count) cards from local storage")
-                } else {
-                    self.loadSampleData()
-                }
-            }
-            
-            // Turn off loading state
-            self.isLoadingCardStatus = false
-        }
-    }
-        // Add a method to force-refresh all data
-        @MainActor
-        func refreshAllData() async {
-            // Show loading indicator
-            isLoadingCards = true
-            
-            // Force refresh from API
-            await loadCreditCardsFromAPI(forceRefresh: true)
-            
-            // Hide loading indicator
-            isLoadingCards = false
-        }
-        
-        // Method to fetch card details with caching
-        @MainActor
-        func getCardDetails(for cardId: String) async -> CreditCardInfo? {
-            // Check if we already have a detailed card
-            if let existingCard = availableCreditCards.first(where: { $0.id == cardId && $0.benefits != nil }) {
-                return existingCard
-            }
-            
-            // Otherwise fetch the details with caching
-            return await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: cardId)
-        }
-    }
-    
-
-extension CardViewModel {
-    // Load cards from API with improved caching
-    @MainActor
-    func loadCreditCardsFromAPI(forceRefresh: Bool = false) async {
-        isLoadingCards = true
-        apiLoadingError = nil
-        
-        do {
-            if forceRefresh {
-                // Clear caches if force refresh is requested
-                print("🔄 Force refreshing card data...")
-                CreditCardService.shared.clearAllCaches()
-            }
-            
-            print("📊 Fetching credit card catalog...")
-            // Use enhanced fetching method with caching
-            availableCreditCards = try await CreditCardService.shared.fetchCreditCards()
-            print("✅ Successfully loaded \(availableCreditCards.count) cards")
-            
-            // Filter out the popular cards
-            filterPopularCards()
-            
-            // Prefetch details for popular cards
-            await prefetchPopularCardDetails()
-        } catch {
-            print("❌ API Error: \(error)")
-            apiLoadingError = "Failed to load credit cards: \(error.localizedDescription)"
-            
-            // If we fail to load cards, check if we have any cached
-            if availableCreditCards.isEmpty {
-                // Fall back to sample data if no cards are available
-                availableCreditCards = CreditCardService.shared.getSampleCreditCardData()
-                popularCreditCards = availableCreditCards // For sample data, use all cards
-                print("⚠️ Using \(availableCreditCards.count) sample cards as fallback")
-            }
-        }
-        
-        isLoadingCards = false
-    }
-}
-
-import SwiftUI
-import Foundation
-import Combine
-
-extension CardViewModel {
-    // Enhanced card update method with better error handling
-    func updateCard(_ card: CreditCard, completion: ((Bool) -> Void)? = nil) {
-        // Ensure we're on the main thread for UI operations
-        DispatchQueue.main.async {
-            if let index = self.cards.firstIndex(where: { $0.id == card.id }) {
-                // Update card in the array
-                self.cards[index] = card
-                
-                // Attempt to save changes
-                let success = self.saveCards()
-                
-                // Force UI refresh
-                self.objectWillChange.send()
-                
-                if success {
-                    print("✅ Successfully updated card: \(card.name)")
-                    completion?(true)
-                } else {
-                    print("❌ Error updating card: \(card.name)")
-                    // Revert change if save failed
-                    if let oldCards = UserService.shared.loadCardsDirectly() {
-                        self.cards = oldCards
-                    }
-                    completion?(false)
-                }
-            } else {
-                print("⚠️ Card not found in array: \(card.id)")
-                completion?(false)
-            }
-        }
-    }
-    
-    // Enhanced toggle method with force save
-    func toggleBonusAchieved(for cardID: UUID, completion: ((Bool) -> Void)? = nil) {
-        // Ensure we're on the main thread
-        DispatchQueue.main.async {
-            if let index = self.cards.firstIndex(where: { $0.id == cardID }) {
-                // Create a copy of the card
-                var updatedCard = self.cards[index]
-                
-                // Toggle the status
-                updatedCard.bonusAchieved.toggle()
-                
-                // Update the card in the array
-                self.cards[index] = updatedCard
-                
-                // CRITICAL: Force save to UserDefaults immediately
-                self.saveCards()
-                
-                // Force UserDefaults to synchronize
-                UserDefaults.standard.synchronize()
-                
-                // Provide feedback
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
-                
-                // Log the change
-                let status = updatedCard.bonusAchieved ? "earned" : "pending"
-                print("💾 Card status changed: \(updatedCard.name) marked as \(status)")
-                
-                completion?(true)
-            } else {
-                print("⚠️ Card not found for toggle: \(cardID)")
-                completion?(false)
-            }
-        }
-    }
-    
-    // Improved save method with error handling
-    func saveCards() -> Bool {
-        do {
-            if UserService.shared.isLoggedIn {
-                UserService.shared.updateUserCards(cards: cards)
-            } else {
-                // Save locally if not logged in
-                if !saveCardsLocally() {
-                    return false
-                }
-            }
-            
-            // Set timestamp for last update
-            UserDefaults.standard.set(Date(), forKey: "lastDataUpdate")
-            return true
-        } catch {
-            print("❌ Error in saveCards: \(error)")
-            return false
-        }
-    }
-    
-    // Improved local saving with error handling
-    func saveCardsLocally() -> Bool {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(cards)
-            UserDefaults.standard.set(data, forKey: "savedCards")
-            
-            print("💾 Cards saved locally: \(cards.count) cards")
-            return true
-        } catch {
-            print("❌ Error saving cards locally: \(error)")
-            return false
-        }
-    }
-}
-
-import SwiftUI
-import Foundation
-
-// Add this to the CardViewModel.swift file to debug the issue
-
-extension CardViewModel {
     // This function will print the current state of all cards
     func debugCardStatus() {
         print("\n===== DEBUG: CURRENT CARD STATUS =====")
@@ -798,7 +851,7 @@ extension CardViewModel {
         print("=====================================\n")
     }
     
-    // Call this when loading cards to verify what's being loaded
+    // Enhanced load user cards with more debug info
     func enhancedLoadUserCards() {
         print("\n===== DEBUG: LOADING USER CARDS =====")
         
@@ -896,78 +949,28 @@ extension CardViewModel {
             return false
         }
     }
+    
+
 }
 
-// Add this to CardViewModel.swift
-
-import SwiftUI
-import Foundation
-import Combine
-
+// MARK: - Profile Integration
 extension CardViewModel {
-    // Modified method to initialize with loading state
-    func initializeWithLoadingState() {
-        // Set loading state to true
-        isLoadingCardStatus = true
-        
-        // Perform loading on background thread
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Load cards
-            let loadedCards = self.loadCardsWithPriority()
-            
-            // Update on main thread
-            DispatchQueue.main.async {
-                self.cards = loadedCards
-                // Turn off loading state
-                self.isLoadingCardStatus = false
-                print("✅ Card loading complete with \(self.cards.count) cards")
-            }
+    // Load cards for the active profile
+    func loadCardsForActiveProfile() {
+        if let profile = ProfileService.shared.activeProfile {
+            // Load the cards associated with this profile
+            cards = profile.cards
+            print("📤 Loaded \(cards.count) cards from active profile")
         }
     }
     
-    // New optimized loading method that prioritizes card status
-    private func loadCardsWithPriority() -> [CreditCard] {
-        print("🔄 Loading cards with priority...")
-        
-        // First try to load from UserDefaults directly as it's fastest
-        if let localCards = loadCardsDirectlyFromDefaults() {
-            print("📦 Loaded \(localCards.count) cards directly from UserDefaults")
-            return localCards
-        }
-        
-        // Then try user account if logged in
-        if let user = UserService.shared.currentUser {
-            print("👤 Loaded \(user.cards.count) cards from user account")
-            return user.cards
-        }
-        
-        // Fall back to local storage (might be redundant but keeping for safety)
-        if let localCards = loadCardsLocally() {
-            print("💾 Loaded \(localCards.count) cards from local storage")
-            return localCards
-        }
-        
-        // Last resort: sample data
-        print("⚠️ Using sample data")
-        var sampleCards: [CreditCard] = []
-        loadSampleData()
-        sampleCards = self.cards
-        return sampleCards
-    }
-    
-    // Direct UserDefaults access for speed
-    private func loadCardsDirectlyFromDefaults() -> [CreditCard]? {
-        guard let data = UserDefaults.standard.data(forKey: "savedCards") else {
-            return nil
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            let cards = try decoder.decode([CreditCard].self, from: data)
-            return cards
-        } catch {
-            print("❌ Error in direct UserDefaults loading: \(error)")
-            return nil
+    // Apply catalog preferences from the active profile
+    func applyProfileCatalogPreferences() {
+        // Here you would apply any catalog preferences from the active profile
+        // For example, favorite cards, custom categories, etc.
+        if let profile = ProfileService.shared.activeProfile {
+            print("📤 Applied catalog preferences from profile: \(profile.name)")
+            // Implementation details would depend on how your catalog preferences work
         }
     }
 }

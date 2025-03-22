@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5C2143732D7F941100A202AD /* CardCategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143722D7F940B00A202AD /* CardCategoryManager.swift */; };
+		5C2143772D7F953600A202AD /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143762D7F952E00A202AD /* AppState.swift */; };
+		5C2143792D8A4F7300A202AD /* CardImageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143782D8A4F6500A202AD /* CardImageDatabase.swift */; };
+		5C21437B2D8F6E9200A202AD /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C21437A2D8F6E8B00A202AD /* UserProfile.swift */; };
+		5C21437D2D8F6EA300A202AD /* ProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C21437C2D8F6EA300A202AD /* ProfileService.swift */; };
+		5C21437F2D8F6EB900A202AD /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C21437E2D8F6EB900A202AD /* ProfileViewModel.swift */; };
+		5C2143812D8F6EC800A202AD /* ProfileSwitcherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143802D8F6EC800A202AD /* ProfileSwitcherView.swift */; };
+		5C2143832D8F6ED700A202AD /* ProfileRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143822D8F6ED700A202AD /* ProfileRowView.swift */; };
+		5C2143852D8F6EE100A202AD /* CreateProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2143842D8F6EE100A202AD /* CreateProfileView.swift */; };
 		5CF29B2D2D6F4F1200AEBA27 /* CreditCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B122D6F4BD200AEBA27 /* CreditCard.swift */; };
 		5CF29B2E2D6F4F1600AEBA27 /* CreditCardInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B132D6F4BEB00AEBA27 /* CreditCardInfo.swift */; };
 		5CF29B2F2D6F4F1A00AEBA27 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B142D6F4C0100AEBA27 /* User.swift */; };
@@ -55,6 +64,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5C2143722D7F940B00A202AD /* CardCategoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardCategoryManager.swift; sourceTree = "<group>"; };
+		5C2143762D7F952E00A202AD /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		5C2143782D8A4F6500A202AD /* CardImageDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardImageDatabase.swift; sourceTree = "<group>"; };
+		5C21437A2D8F6E8B00A202AD /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		5C21437C2D8F6EA300A202AD /* ProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
+		5C21437E2D8F6EB900A202AD /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
+		5C2143802D8F6EC800A202AD /* ProfileSwitcherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSwitcherView.swift; sourceTree = "<group>"; };
+		5C2143822D8F6ED700A202AD /* ProfileRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRowView.swift; sourceTree = "<group>"; };
+		5C2143842D8F6EE100A202AD /* CreateProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateProfileView.swift; sourceTree = "<group>"; };
 		5CF29AAA2D6D764700AEBA27 /* CreditCardTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CreditCardTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5CF29ABA2D6D764900AEBA27 /* CreditCardTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CreditCardTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5CF29AC42D6D764900AEBA27 /* CreditCardTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CreditCardTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -158,6 +176,7 @@
 		5CF29B092D6F4B6E00AEBA27 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				5C21437A2D8F6E8B00A202AD /* UserProfile.swift */,
 				5CF29B5E2D6FF2F800AEBA27 /* CardSearchModel.swift */,
 				5CF29B5C2D6F5B5F00AEBA27 /* APIModels.swift */,
 				5CF29B142D6F4C0100AEBA27 /* User.swift */,
@@ -170,6 +189,10 @@
 		5CF29B0A2D6F4B7800AEBA27 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				5C21437C2D8F6EA300A202AD /* ProfileService.swift */,
+				5C2143782D8A4F6500A202AD /* CardImageDatabase.swift */,
+				5C2143762D7F952E00A202AD /* AppState.swift */,
+				5C2143722D7F940B00A202AD /* CardCategoryManager.swift */,
 				5CF29B5A2D6F5A0600AEBA27 /* APIClient.swift */,
 				5CF29B162D6F4C4200AEBA27 /* UserService.swift */,
 				5CF29B152D6F4C1300AEBA27 /* CreditCardService.swift */,
@@ -180,6 +203,7 @@
 		5CF29B0B2D6F4B7F00AEBA27 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				5C21437E2D8F6EB900A202AD /* ProfileViewModel.swift */,
 				5CF29B172D6F4C5900AEBA27 /* CardViewModel.swift */,
 			);
 			path = ViewModels;
@@ -200,6 +224,9 @@
 		5CF29B182D6F4C9D00AEBA27 /* Main */ = {
 			isa = PBXGroup;
 			children = (
+				5C2143842D8F6EE100A202AD /* CreateProfileView.swift */,
+				5C2143822D8F6ED700A202AD /* ProfileRowView.swift */,
+				5C2143802D8F6EC800A202AD /* ProfileSwitcherView.swift */,
 				5CF29B212D6F4D3E00AEBA27 /* MainAppView.swift */,
 			);
 			path = Main;
@@ -397,15 +424,22 @@
 			files = (
 				5CF29B392D6F4F4900AEBA27 /* CardCatalogView.swift in Sources */,
 				5CF29B2F2D6F4F1A00AEBA27 /* User.swift in Sources */,
+				5C2143732D7F941100A202AD /* CardCategoryManager.swift in Sources */,
+				5C2143792D8A4F7300A202AD /* CardImageDatabase.swift in Sources */,
+				5C21437B2D8F6E9200A202AD /* UserProfile.swift in Sources */,
 				5CF29B352D6F4F3600AEBA27 /* CardRowView.swift in Sources */,
+				5C21437D2D8F6EA300A202AD /* ProfileService.swift in Sources */,
 				5CF29B302D6F4F1E00AEBA27 /* CreditCardService.swift in Sources */,
 				5CF29B372D6F4F4100AEBA27 /* CardDetailView.swift in Sources */,
 				5CF29B312D6F4F2300AEBA27 /* UserService.swift in Sources */,
 				5CF29B2D2D6F4F1200AEBA27 /* CreditCard.swift in Sources */,
 				5CF29B2E2D6F4F1600AEBA27 /* CreditCardInfo.swift in Sources */,
 				5CF29B5D2D6F5B6600AEBA27 /* APIModels.swift in Sources */,
+				5C2143832D8F6ED700A202AD /* ProfileRowView.swift in Sources */,
 				5CF29B5B2D6F5A0B00AEBA27 /* APIClient.swift in Sources */,
+				5C2143852D8F6EE100A202AD /* CreateProfileView.swift in Sources */,
 				5CF29B422D6F506400AEBA27 /* SummaryCard.swift in Sources */,
+				5C2143772D7F953600A202AD /* AppState.swift in Sources */,
 				5CF29B382D6F4F4500AEBA27 /* AddCardView.swift in Sources */,
 				5CF29B462D6F529300AEBA27 /* CardPickerView.swift in Sources */,
 				5CF29B3B2D6F4F5100AEBA27 /* CardDetailCatalogView.swift in Sources */,
@@ -414,6 +448,7 @@
 				5CF29B342D6F4F2F00AEBA27 /* TrackerView.swift in Sources */,
 				5CF29B3D2D6F4F5E00AEBA27 /* LoginView.swift in Sources */,
 				5CF29B3E2D6F4F6100AEBA27 /* AccountView.swift in Sources */,
+				5C2143812D8F6EC800A202AD /* ProfileSwitcherView.swift in Sources */,
 				5CF29B3C2D6F4F5900AEBA27 /* SignUpView.swift in Sources */,
 				5CF29B5F2D6FF2F900AEBA27 /* CardSearchModel.swift in Sources */,
 				5CF29B3A2D6F4F4E00AEBA27 /* CatalogCardView.swift in Sources */,
@@ -423,6 +458,7 @@
 				5CF29B332D6F4F2B00AEBA27 /* MainAppView.swift in Sources */,
 				5CF29B412D6F505C00AEBA27 /* CategoryButton.swift in Sources */,
 				5CF29B322D6F4F2700AEBA27 /* CardViewModel.swift in Sources */,
+				5C21437F2D8F6EB900A202AD /* ProfileViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

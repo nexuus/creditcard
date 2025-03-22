@@ -171,12 +171,23 @@ struct AddCardView: View {
                 )
             }
             
+            // Update the onChange handler in AddCardView to take advantage of the detailed card info
+
+            // Find this section in your AddCardView.swift file and replace it with this enhanced version:
             .onChange(of: selectedCard) { newSelectedCard in
                 if let card = newSelectedCard {
                     // Auto-fill form fields with selected card data
                     name = card.name
                     issuer = card.issuer
-                    signupBonus = String(card.signupBonus)
+                    
+                    // Use detailed signup bonus data if available
+                    if let spendReq = card.signupBonusSpend, spendReq > 0 {
+                        signupBonus = String(card.signupBonus)
+                    } else {
+                        signupBonus = String(card.signupBonus)
+                    }
+                    
+                    // Use detailed annual fee info
                     annualFee = String(format: "%.0f", card.annualFee)
                     
                     // Prepare detailed description for notes
@@ -184,9 +195,51 @@ struct AddCardView: View {
                     detailedNotes += "• Category: \(card.category)\n"
                     detailedNotes += "• Annual Fee: $\(card.annualFee)\n"
                     detailedNotes += "• Signup Bonus: \(card.signupBonus) points\n"
+                    
+                    // Add spend requirement if available
+                    if let spendReq = card.signupBonusSpend, spendReq > 0 {
+                        detailedNotes += "• Spend Requirement: $\(spendReq)\n"
+                    }
+                    
+                    // Add time frame if available
+                    if let months = card.signupBonusLength, months > 0 {
+                        detailedNotes += "• Time Frame: \(months) months\n"
+                    }
+                    
+                    // Add credit score recommendation if available
+                    if let creditRange = card.creditRange, !creditRange.isEmpty {
+                        detailedNotes += "• Recommended Credit: \(creditRange)\n"
+                    }
+                    
+                    // Add foreign transaction fee if available
+                    if let fxFee = card.fxFee {
+                        detailedNotes += "• Foreign Transaction Fee: \(Int(fxFee * 100))%\n"
+                    }
+                    
+                    // Add APR info
+                    detailedNotes += "• Regular APR: \(card.regularAPR)\n"
+                    
+                    // Add any benefit highlights if available
+                    if let benefits = card.benefits, !benefits.isEmpty {
+                        detailedNotes += "\nKey Benefits:\n"
+                        for benefit in benefits.prefix(3) {
+                            detailedNotes += "• \(benefit.benefitTitle)\n"
+                        }
+                    }
+                    
+                    // Add bonus categories if available
+                    if let categories = card.bonusCategories, !categories.isEmpty {
+                        detailedNotes += "\nBonus Categories:\n"
+                        for category in categories.prefix(3) {
+                            detailedNotes += "• \(category.spendBonusDesc)\n"
+                        }
+                    }
+                    
+                    // Add description at the end
                     if !card.description.isEmpty {
                         detailedNotes += "\nDescription:\n\(card.description)"
                     }
+                    
                     notes = detailedNotes
                 }
             }

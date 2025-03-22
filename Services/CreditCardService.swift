@@ -28,21 +28,32 @@ class CreditCardService {
     }
     
     // MARK: - Cache Management
-    
-    // Fetch comprehensive card catalog by combining basic and search endpoints
     func fetchComprehensiveCardCatalog() async throws -> [CreditCardInfo] {
         print("📊 Fetching comprehensive card catalog...")
         
-        // First check cache
+        // First check in-memory cache
         var cachedResult: [CreditCardInfo]?
         cacheQueue.sync {
             cachedResult = self.cachedCards
         }
         
         if let cachedCards = cachedResult {
-            print("📋 Using cached comprehensive catalog with \(cachedCards.count) cards")
+            print("📋 Using in-memory cached comprehensive catalog with \(cachedCards.count) cards")
             return cachedCards
         }
+        
+        // Then check device storage before trying API
+        if let deviceCachedCards = loadCatalogCardsFromDevice() {
+            print("📋 Using device-cached catalog cards")
+            // Update in-memory cache
+            cacheQueue.sync {
+                self.cachedCards = deviceCachedCards
+            }
+            return deviceCachedCards
+        }
+        
+        // If no cached data, try to fetch from API
+        print("🌐 Fetching comprehensive catalog from API...")
         
         var allCards: [CreditCardInfo] = []
         
@@ -76,9 +87,15 @@ class CreditCardService {
                 }
             }
             
-            print("✅ Added \(allCards.count - seenCardIds.count) unique cards from search")
+            print("✅ Added \(searchCards.count) cards from search, \(allCards.count) total unique cards")
         } catch {
             print("⚠️ Error fetching search cards: \(error)")
+        }
+        
+        // If we didn't get any cards from API, fall back to sample data
+        if allCards.isEmpty {
+            print("⚠️ No cards retrieved from API, using sample data")
+            allCards = getSampleCreditCardData()
         }
         
         // Sort cards by issuer and name
@@ -95,11 +112,54 @@ class CreditCardService {
         }
         
         // Save to device cache
-        saveCardsToDevice(allCards)
+        saveCatalogCardsToDevice(allCards)
         
         print("✅ Complete catalog contains \(allCards.count) unique credit cards")
         return allCards
     }
+
+    
+    func saveCatalogCardsToDevice(_ cards: [CreditCardInfo]) {
+        do {
+            let data = try JSONEncoder().encode(cards)
+            let cacheInfo = CacheInfo(timestamp: Date())
+            let cacheInfoData = try JSONEncoder().encode(cacheInfo)
+            
+            UserDefaults.standard.set(data, forKey: "cachedCatalogCards")
+            UserDefaults.standard.set(cacheInfoData, forKey: "cachedCatalogCards_info")
+            print("💾 Saved \(cards.count) catalog cards to device cache")
+            
+            // Force synchronize to ensure data is written immediately
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("❌ Error saving catalog cards to device: \(error)")
+        }
+    }
+    
+    func loadCatalogCardsFromDevice() -> [CreditCardInfo]? {
+        // Check if cache exists and is valid
+        guard let cacheInfoData = UserDefaults.standard.data(forKey: "cachedCatalogCards_info"),
+              let cacheInfo = try? JSONDecoder().decode(CacheInfo.self, from: cacheInfoData),
+              isCacheValid(cacheInfo: cacheInfo) else {
+            print("📋 No valid catalog card cache found")
+            return nil
+        }
+        
+        // Load cached data
+        guard let cachedData = UserDefaults.standard.data(forKey: "cachedCatalogCards") else {
+            return nil
+        }
+        
+        do {
+            let cards = try JSONDecoder().decode([CreditCardInfo].self, from: cachedData)
+            print("📋 Loaded \(cards.count) catalog cards from device cache")
+            return cards
+        } catch {
+            print("❌ Error decoding cached catalog cards: \(error)")
+            return nil
+        }
+    }
+
     
     // Fetch cards using search terms
     func fetchCardsBySearch(searchTerms: [String]) async throws -> [CreditCardInfo] {
@@ -157,6 +217,68 @@ class CreditCardService {
         } catch {
             print("❌ API Error: \(error)")
             return getSampleCreditCardData() // Fallback to sample data
+        }
+    }
+    
+    // Add these two test methods to your CreditCardService class
+
+    // Test method for card image loading
+    func testCardImage(cardKey: String) {
+        print("🧪 Testing card image loading for: \(cardKey)")
+        
+        Task {
+            if let image = await fetchCardImage(for: cardKey) {
+                print("✅ Successfully loaded image for \(cardKey) - Size: \(image.size.width) x \(image.size.height)")
+            } else {
+                print("❌ Failed to load image for card: \(cardKey)")
+            }
+        }
+    }
+
+    // Test method for the search API
+    func testSearchAPI(term: String) async {
+        print("🧪 Testing search API for term: \(term)")
+        
+        do {
+            // Create the URL for testing
+            let searchURL = URL(string: APIClient.baseURL + "/creditcard-detail-namesearch/\(term)")!
+            var request = URLRequest(url: searchURL)
+            request.httpMethod = "GET"
+            request.addValue(APIClient.apiKey, forHTTPHeaderField: "x-rapidapi-key")
+            request.addValue(APIClient.apiHost, forHTTPHeaderField: "x-rapidapi-host")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Not an HTTP response")
+                return
+            }
+            
+            print("📥 HTTP Status: \(httpResponse.statusCode)")
+            
+            if (200...299).contains(httpResponse.statusCode) {
+                print("✅ Successful response")
+                
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    let preview = jsonString.prefix(500)
+                    print("📄 Data preview: \(preview)...")
+                }
+                
+                do {
+                    let decoder = JSONDecoder()
+                    let decoded = try decoder.decode(CardSearchAPIResponse.self, from: data)
+                    print("✅ Successfully decoded \(decoded.count) cards for search term '\(term)'")
+                } catch {
+                    print("❌ Decoding error: \(error)")
+                }
+            } else {
+                print("❌ HTTP Error: \(httpResponse.statusCode)")
+                if let errorText = String(data: data, encoding: .utf8) {
+                    print("Error details: \(errorText)")
+                }
+            }
+        } catch {
+            print("❌ Network error: \(error)")
         }
     }
     
@@ -443,115 +565,69 @@ class CreditCardService {
         return detailedCard
     }
     
-    // Helper function to categorize based on description
     private func getCategoryFromDescription(_ description: String) -> String {
-        let lowercased = description.lowercased()
-        
-        // Try to infer category from description
-        if lowercased.contains("groceries") || lowercased.contains("supermarket") {
-            return "Groceries"
-        } else if lowercased.contains("dining") || lowercased.contains("restaurant") {
-            return "Dining"
-        } else if lowercased.contains("travel") || lowercased.contains("flight") || lowercased.contains("hotel") {
-            return "Travel"
-        } else if lowercased.contains("airline") || lowercased.contains("flight") {
-            return "Airline"
-        } else if lowercased.contains("hotel") || lowercased.contains("resort") {
-            return "Hotel"
-        } else if lowercased.contains("gas") || lowercased.contains("fuel") {
-            return "Gas"
-        } else if lowercased.contains("cash") || lowercased.contains("back") {
-            return "Cashback"
-        } else if lowercased.contains("business") {
-            return "Business"
-        } else {
-            return "General"
-        }
-    }
-    
-    // Enhanced category detection from card details
-    func getCategoryFromDetail(_ cardDetail: CardDetail) -> String {
-        // Start with a default category
-        var category = "General"
-        
-        // Check if we have bonus categories
-        if !cardDetail.spendBonusCategory.isEmpty {
-            // Get the category with the highest multiplier
-            if let highest = cardDetail.spendBonusCategory.max(by: { $0.earnMultiplier < $1.earnMultiplier }) {
-                let bonusCategory = highest.spendBonusCategoryGroup
-                
-                // If the highest bonus category is significant, use it
-                if highest.earnMultiplier >= 3.0 {
-                    return standardizeCardCategory(bonusCategory)
-                }
-                
-                // Otherwise, consider it but keep checking
-                category = standardizeCardCategory(bonusCategory)
-            }
-        }
-        
-        // Check the sign-up bonus category
-        if !cardDetail.signupBonusCategory.isEmpty {
-            let signupCategory = cardDetail.signupBonusCategory
-            
-            // If it's a travel-related signup bonus, prioritize that
-            if signupCategory.lowercased().contains("travel") ||
-               signupCategory.lowercased().contains("hotel") ||
-               signupCategory.lowercased().contains("airline") {
-                return standardizeCardCategory(signupCategory)
-            }
-        }
-        
-        // Look for key features in the benefits
-        for benefit in cardDetail.benefit {
-            let benefitDesc = benefit.benefitDesc.lowercased()
-            
-            if benefitDesc.contains("travel credit") ||
-               benefitDesc.contains("hotel credit") ||
-               benefitDesc.contains("lounge access") {
-                return "Travel"
-            }
-            
-            if benefitDesc.contains("free night") || benefitDesc.contains("hotel status") {
-                return "Hotel"
-            }
-            
-            if benefitDesc.contains("companion pass") || benefitDesc.contains("free checked bag") {
-                return "Airline"
-            }
-        }
-        
-        // Return the best category we've found
-        return category
+        // Use the centralized category manager
+        return CardCategoryManager.shared.categorizeFromString(description)
     }
 
-    // Standardize categories to a common set
-    func standardizeCardCategory(_ category: String) -> String {
-        let lowerCategory = category.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    func getCategoryFromDetail(_ cardDetail: CardDetail) -> String {
+        // Extract relevant information for categorization
+        var categoryText = cardDetail.cardName + " " + cardDetail.signupBonusDesc
         
-        // Map to standard categories
-        if lowerCategory.contains("travel") || lowerCategory.contains("point") {
-            return "Travel"
-        } else if lowerCategory.contains("cash") || lowerCategory.contains("back") {
-            return "Cashback"
-        } else if lowerCategory.contains("hotel") || lowerCategory.contains("lodging") {
-            return "Hotel"
-        } else if lowerCategory.contains("airline") || lowerCategory.contains("flight") {
-            return "Airline"
-        } else if lowerCategory.contains("dining") || lowerCategory.contains("restaurant") {
-            return "Dining"
-        } else if lowerCategory.contains("grocer") || lowerCategory.contains("supermarket") {
-            return "Groceries"
-        } else if lowerCategory.contains("gas") || lowerCategory.contains("fuel") {
-            return "Gas"
-        } else if lowerCategory.contains("business") {
-            return "Business"
-        } else if lowerCategory.contains("student") || lowerCategory.contains("college") {
-            return "Student"
-        } else {
-            return "General"
+        // Add bonus category information
+        for category in cardDetail.spendBonusCategory {
+            categoryText += " " + category.spendBonusCategoryGroup + " " + category.spendBonusDesc
+        }
+        
+        // Add benefit information
+        for benefit in cardDetail.benefit {
+            categoryText += " " + benefit.benefitTitle + " " + benefit.benefitDesc
+        }
+        
+        // Use the centralized manager for consistent categorization
+        return CardCategoryManager.shared.categorizeFromString(categoryText)
+    }
+
+    // Replace the existing standardizeCardCategory method with this:
+    func standardizeCardCategory(_ category: String) -> String {
+        return CardCategoryManager.shared.standardizeCategory(category)
+    }
+    
+    // Add this method to your CreditCardService class to recategorize existing cards
+    func recategorizeAllCards() {
+        // Log what we're doing
+        print("🔄 Recategorizing all cards for consistency...")
+        
+        // Process popularCreditCards
+        if let viewModel = AppState.shared.cardViewModel {
+            var updatedCount = 0
+            
+            // Update available cards
+            for index in 0..<viewModel.availableCreditCards.count {
+                let card = viewModel.availableCreditCards[index]
+                let newCategory = CardCategoryManager.shared.categorizeCard(card)
+                
+                if card.category != newCategory {
+                    updatedCount += 1
+                    viewModel.availableCreditCards[index].category = newCategory
+                }
+            }
+            
+            // Update popular cards
+            for index in 0..<viewModel.popularCreditCards.count {
+                let card = viewModel.popularCreditCards[index]
+                let newCategory = CardCategoryManager.shared.categorizeCard(card)
+                
+                if card.category != newCategory {
+                    viewModel.popularCreditCards[index].category = newCategory
+                }
+            }
+            
+            print("✅ Recategorized \(updatedCount) cards for consistency")
         }
     }
+
     
     // Sample data for fallback
     func getSampleCreditCardData() -> [CreditCardInfo] {
@@ -596,6 +672,9 @@ class CreditCardService {
         let cardName: String
         let cardImageUrl: String
     }
+    
+    
+    
     
     // Method for fetching card images with caching
     func fetchCardImage(for cardKey: String) async -> UIImage? {
@@ -728,6 +807,202 @@ class CreditCardService {
             return placeholderImage
         }
     }
+    
+    // Corrected method for fetching card images with database integration
+    func fetchCardImageEnhanced(for cardKey: String, card: CreditCardInfo? = nil) async -> UIImage? {
+        guard !cardKey.isEmpty else {
+            print("⚠️ Empty card key provided")
+            return createGenericCardImage(id: "unknown")
+        }
+        
+        // First check in-memory cache
+        if let cachedImage = imageCache.object(forKey: cardKey as NSString) {
+            print("🖼️ Using in-memory cached image for \(cardKey)")
+            return cachedImage
+        }
+        
+        // Then check disk cache
+        if let diskCachedImage = loadImageFromDisk(for: cardKey) {
+            print("🖼️ Using disk cached image for \(cardKey)")
+            
+            // Store in memory cache (thread-safe)
+            DispatchQueue.main.async {
+                self.imageCache.setObject(diskCachedImage, forKey: cardKey as NSString)
+            }
+            return diskCachedImage
+        }
+        
+        print("🌐 Fetching enhanced image for card: \(cardKey)")
+        
+        // Try to get image from the database if we have the card info
+        // Fixed: Don't use await with nil-coalescing operator
+        var cardInfo = card
+        if cardInfo == nil {
+            cardInfo = await getCardInfoForKey(cardKey)
+        }
+        
+        if let cardInfo = cardInfo {
+            if let databaseImage = await CardImageDatabase.shared.getImageForCard(cardId: cardKey, card: cardInfo) {
+                print("📚 Using image from database for \(cardKey)")
+                
+                // Cache the image (thread-safe)
+                DispatchQueue.main.async {
+                    self.imageCache.setObject(databaseImage, forKey: cardKey as NSString)
+                }
+                saveToDiskCache(image: databaseImage, for: cardKey)
+                return databaseImage
+            }
+        }
+        
+        // If no database match, try the API
+        do {
+            // First, we need to get the URL to the actual image
+            let imageInfoUrl = URL(string: "https://rewards-credit-card-api.p.rapidapi.com/creditcard-card-image/\(cardKey)")!
+            
+            let headers = [
+                "x-rapidapi-key": APIClient.apiKey,
+                "x-rapidapi-host": APIClient.apiHost
+            ]
+            
+            var request = URLRequest(url: imageInfoUrl)
+            request.httpMethod = "GET"
+            request.allHTTPHeaderFields = headers
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Not an HTTP response for image info")
+                let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                saveToDiskCache(image: placeholderImage, for: cardKey)
+                return placeholderImage
+            }
+            
+            print("📥 Image info response status: \(httpResponse.statusCode)")
+            
+            // If we got valid JSON data, try to parse it
+            if let jsonString = String(data: data, encoding: .utf8) {
+                // Check if it's an empty array or other invalid response
+                if jsonString == "[]" || jsonString == "{}" {
+                    print("⚠️ Empty response from API")
+                    let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                    saveToDiskCache(image: placeholderImage, for: cardKey)
+                    return placeholderImage
+                }
+                
+                // Try to decode the response
+                let decoder = JSONDecoder()
+                var imageUrl: URL? = nil
+                
+                // Try to decode as array first (which seems to be the format)
+                do {
+                    if let imageResponses = try? decoder.decode([CardImageResponse].self, from: data),
+                       !imageResponses.isEmpty,
+                       let firstResponse = imageResponses.first,
+                       !firstResponse.cardImageUrl.isEmpty {
+                        imageUrl = URL(string: firstResponse.cardImageUrl)
+                        print("✅ Found image URL from array response: \(firstResponse.cardImageUrl)")
+                        
+                        // Save to database if we have card info
+                        if let cardInfoForDb = cardInfo {
+                            await MainActor.run {
+                                CardImageDatabase.shared.addImageFromAPI(
+                                    cardId: cardKey,
+                                    issuer: cardInfoForDb.issuer,
+                                    cardName: cardInfoForDb.name,
+                                    imageURL: firstResponse.cardImageUrl
+                                )
+                            }
+                        }
+                    }
+                    // Fallback: try to decode as a single object
+                    else if let imageResponse = try? decoder.decode(CardImageResponse.self, from: data),
+                            !imageResponse.cardImageUrl.isEmpty {
+                        imageUrl = URL(string: imageResponse.cardImageUrl)
+                        print("✅ Found image URL from single response: \(imageResponse.cardImageUrl)")
+                        
+                        // Save to database if we have card info
+                        if let cardInfoForDb = cardInfo {
+                            await MainActor.run {
+                                CardImageDatabase.shared.addImageFromAPI(
+                                    cardId: cardKey,
+                                    issuer: cardInfoForDb.issuer,
+                                    cardName: cardInfoForDb.name,
+                                    imageURL: imageResponse.cardImageUrl
+                                )
+                            }
+                        }
+                    }
+                } catch {
+                    print("❌ Error decoding image response: \(error)")
+                }
+                
+                // If we have a valid URL, download the actual image
+                if let imageUrl = imageUrl {
+                    do {
+                        print("📥 Downloading image from URL: \(imageUrl)")
+                        let (imageData, imageResponse) = try await URLSession.shared.data(from: imageUrl)
+                        
+                        guard let httpImageResponse = imageResponse as? HTTPURLResponse,
+                              (200...299).contains(httpImageResponse.statusCode) else {
+                            print("❌ Failed to download image from URL")
+                            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+                            saveToDiskCache(image: placeholderImage, for: cardKey)
+                            return placeholderImage
+                        }
+                        
+                        if let image = UIImage(data: imageData) {
+                            print("🎉 Successfully downloaded image from URL!")
+                            
+                            // Cache the image (thread-safe)
+                            DispatchQueue.main.async {
+                                self.imageCache.setObject(image, forKey: cardKey as NSString)
+                            }
+                            saveToDiskCache(image: image, for: cardKey)
+                            return image
+                        } else {
+                            print("❌ Invalid image data from URL")
+                        }
+                    } catch {
+                        print("❌ Error downloading image from URL: \(error)")
+                    }
+                } else {
+                    print("❌ No valid image URL found in response")
+                }
+            } else {
+                print("❌ Failed to convert response to string")
+            }
+            
+            // If we couldn't get a valid image, generate a placeholder
+            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+            saveToDiskCache(image: placeholderImage, for: cardKey)
+            return placeholderImage
+        } catch {
+            print("❌ Error fetching image info: \(error)")
+            let placeholderImage = await generatePlaceholderImage(for: cardKey)
+            saveToDiskCache(image: placeholderImage, for: cardKey)
+            return placeholderImage
+        }
+    }
+
+    
+    private func getCardInfoForKey(_ cardKey: String) async -> CreditCardInfo? {
+        // First check in cached cards
+        if let viewModel = AppState.shared.cardViewModel {
+            if let card = viewModel.availableCreditCards.first(where: { $0.id == cardKey }) {
+                return card
+            }
+        }
+        
+        // If not found, try to fetch it from the API
+        do {
+            return try await fetchCardDetail(cardKey: cardKey)
+        } catch {
+            print("❌ Error fetching card details for image lookup: \(error)")
+            return nil
+        }
+    }
+
+    
     
     // Fallback method for fetching images from URL
     func fetchCardImageFromURL(for url: String) async -> UIImage? {
@@ -1195,20 +1470,35 @@ class CreditCardService {
         }
     }
     
-    // Preload common card images to cache
     func preloadCommonCardImages() {
         Task {
-            let commonCards = ["chase-sapphire-preferred", "chase-sapphire-reserve", "amex-gold", "amex-platinum", "chase-hyatt"]
+            let commonCards = ["chase-sapphire-preferred", "chase-sapphire-reserve", "amex-gold", "amex-platinum", "chase-hyatt", "capital-one-venture", "discover-it", "citi-double-cash"]
             
             for cardKey in commonCards {
                 // Check if image is already in cache (thread-safe)
                 if imageCache.object(forKey: cardKey as NSString) == nil && loadImageFromDisk(for: cardKey) == nil {
                     print("🔄 Preloading image for: \(cardKey)")
-                    _ = await fetchCardImage(for: cardKey)
+                    
+                    // Get the card info if possible
+                    var cardInfo: CreditCardInfo? = nil
+                    if let viewModel = AppState.shared.cardViewModel {
+                        cardInfo = viewModel.availableCreditCards.first(where: { $0.id == cardKey })
+                    }
+                    
+                    // Use enhanced image fetching
+                    _ = await fetchCardImageEnhanced(for: cardKey, card: cardInfo)
                 }
             }
         }
     }
+    // Initialize the image database
+    func initializeImageDatabase() {
+        Task {
+            await CardImageDatabase.shared.initialize()
+        }
+    }
+    
+    
 }
 
 // Helper struct to track cache age

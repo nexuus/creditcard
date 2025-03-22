@@ -196,19 +196,6 @@ struct CardInfoRow: View {
     }
     
     func categoryColor(for category: String) -> Color {
-        switch category.lowercased() {
-        case "travel":
-            return .blue
-        case "cashback":
-            return .green
-        case "business":
-            return .purple
-        case "hotel":
-            return .orange
-        case "airline":
-            return .red
-        default:
-            return .gray
-        }
+        return CardCategoryManager.shared.colorForCategory(category)
     }
 }

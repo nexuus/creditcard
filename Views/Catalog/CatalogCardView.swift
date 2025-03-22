@@ -122,15 +122,14 @@ struct CatalogCardView: View {
         }
     }
     
-    // Load image using cardKey
     private func loadCardImage() {
         isLoadingImage = true
         imageLoadError = false
         
         Task {
             do {
-                // First try to load from the dedicated card image endpoint
-                if let image = await CreditCardService.shared.fetchCardImage(for: card.id) {
+                // Use the enhanced image loading with database support
+                if let image = await CreditCardService.shared.fetchCardImageEnhanced(for: card.id, card: card) {
                     await MainActor.run {
                         withAnimation {
                             self.cardImage = image
@@ -140,20 +139,7 @@ struct CatalogCardView: View {
                     return
                 }
                 
-                // Fallback to using imageName if it's a URL
-                if !card.imageName.isEmpty {
-                    if let image = await CreditCardService.shared.fetchCardImageFromURL(for: card.imageName) {
-                        await MainActor.run {
-                            withAnimation {
-                                self.cardImage = image
-                                self.isLoadingImage = false
-                            }
-                        }
-                        return
-                    }
-                }
-                
-                // If both methods fail, show error state
+                // If no image found, show error state
                 throw URLError(.cannotDecodeRawData)
             } catch {
                 await MainActor.run {
@@ -173,28 +159,8 @@ struct CatalogCardView: View {
         return formatter.string(from: NSNumber(value: points)) ?? "\(points)"
     }
     
-    // Get color based on card category
     func getCategoryColor(for category: String) -> Color {
-        switch category.lowercased() {
-        case "travel":
-            return .blue
-        case "cashback":
-            return .green
-        case "business":
-            return .purple
-        case "hotel":
-            return .orange
-        case "airline":
-            return .red
-        case "groceries":
-            return .green
-        case "dining":
-            return .orange
-        case "gas":
-            return .purple
-        default:
-            return .gray
-        }
+        return CardCategoryManager.shared.colorForCategory(category)
     }
 }
 
