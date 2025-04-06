@@ -89,8 +89,12 @@ struct MainAppView: View {
             .padding(.trailing, 16)
             , alignment: .topTrailing
         )
+        // Update this in MainAppView.swift's onChange handler
         .onChange(of: profileViewModel.activeProfile?.id) { newProfileId in
             if newProfileId != nil {
+                // Save current cards to previous profile before switching
+                viewModel.syncCardsToActiveProfile()
+                
                 // When profile changes, reload cards for that profile
                 viewModel.loadCardsForActiveProfile()
                 
@@ -101,6 +105,7 @@ struct MainAppView: View {
                 if let profile = profileViewModel.activeProfile {
                     isDarkMode = profile.themePreference.isDarkMode
                 }
+                
             }
         }
     }

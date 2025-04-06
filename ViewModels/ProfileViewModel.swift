@@ -93,7 +93,15 @@ class ProfileViewModel: ObservableObject {
     }
     
     func switchProfile(_ profileId: UUID) {
+        // First, sync current cards to the current active profile
+        if let cardViewModel = AppState.shared.cardViewModel {
+            cardViewModel.syncCardsToActiveProfile()
+        }
+        
+        // Then set the new active profile
         ProfileService.shared.setActiveProfile(profileId)
+        
+        // Hide the profile switcher
         isProfileSwitcherVisible = false
     }
     

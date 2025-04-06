@@ -234,6 +234,7 @@ extension CardViewModel {
     }
     
     // Save cards to storage
+    // Update this method in CardViewModel.swift
     func saveCards() -> Bool {
         do {
             if UserService.shared.isLoggedIn {
@@ -244,6 +245,9 @@ extension CardViewModel {
                     return false
                 }
             }
+            
+            // Sync cards to active profile (add this line)
+            syncCardsToActiveProfile()
             
             // Set timestamp for last update
             UserDefaults.standard.set(Date(), forKey: "lastDataUpdate")
@@ -913,6 +917,15 @@ extension CardViewModel {
         }
     }
     
+    // Add this to CardViewModel.swift
+    func syncCardsToActiveProfile() {
+        if let activeProfile = ProfileService.shared.activeProfile {
+            // Save current cards to the active profile
+            ProfileService.shared.updateActiveProfileCards(cards)
+            print("✅ Synced \(cards.count) cards to active profile: \(activeProfile.name)")
+        }
+    }
+    
     // Enhanced local saving with more logging
     func enhancedSaveCardsLocally() -> Bool {
         do {
@@ -956,11 +969,12 @@ extension CardViewModel {
 // MARK: - Profile Integration
 extension CardViewModel {
     // Load cards for the active profile
+    // Update in CardViewModel.swift
     func loadCardsForActiveProfile() {
         if let profile = ProfileService.shared.activeProfile {
-            // Load the cards associated with this profile
-            cards = profile.cards
-            print("📤 Loaded \(cards.count) cards from active profile")
+            // Create a deep copy of the profile's cards
+            self.cards = profile.cards.map { $0 }
+            print("📤 Loaded \(cards.count) cards from active profile: \(profile.name)")
         }
     }
     
@@ -972,5 +986,47 @@ extension CardViewModel {
             print("📤 Applied catalog preferences from profile: \(profile.name)")
             // Implementation details would depend on how your catalog preferences work
         }
+    }
+}
+
+// MARK: - Statistics and Metrics
+extension CardViewModel {
+    // Add this new method to calculate 5/24 status
+    func calculate524Status() -> (count: Int, cards: [CreditCard]) {
+        let twentyFourMonthsAgo = Calendar.current.date(byAdding: .month, value: -24, to: Date()) ?? Date()
+        
+        // Filter cards opened in the last 24 months
+        let recentCards = cards.filter { card in
+            return card.dateOpened > twentyFourMonthsAgo
+        }
+        
+        // Sort by most recent first
+        let sortedCards = recentCards.sorted { $0.dateOpened > $1.dateOpened }
+        
+        return (count: recentCards.count, cards: sortedCards)
+    }
+    
+    // Helper method to check if user is under the 5/24 rule
+    func isUnder524Rule() -> Bool {
+        return calculate524Status().count < 5
+    }
+    
+    // Helper method to get next eligible date (when oldest card falls off)
+    func nextEligibleDate() -> Date? {
+        let status = calculate524Status()
+        
+        // If under 5/24, already eligible
+        if status.count < 5 {
+            return Date()
+        }
+        
+        // If exactly at or over 5/24, find the 5th newest card (the oldest of the 5)
+        if status.cards.count >= 5 {
+            let fifthNewestCard = status.cards[min(4, status.cards.count - 1)]
+            // Add 24 months to that card's opening date
+            return Calendar.current.date(byAdding: .month, value: 24, to: fifthNewestCard.dateOpened)
+        }
+        
+        return nil
     }
 }

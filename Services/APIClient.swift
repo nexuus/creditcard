@@ -14,7 +14,7 @@ import Foundation
 
 struct APIClient {
     // Use your actual RapidAPI credentials
-    static let apiKey = "a65d839d26msh7165854114aafbbp1c3b60jsnc2e5f215b4c9"
+    static let apiKey = "7afdf81bdfmshec1b3d513d53327p1aa78bjsncf0b3e26c2a5"
     static let apiHost = "rewards-credit-card-api.p.rapidapi.com"
     static let baseURL = "https://rewards-credit-card-api.p.rapidapi.com"
     

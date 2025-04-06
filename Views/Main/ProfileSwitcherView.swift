@@ -29,10 +29,16 @@ struct ProfileSwitcherView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.profiles) { profile in
+                                // In ProfileSwitcherView.swift, modify the onSelect action
                                 ProfileRowView(
                                     profile: profile,
                                     isActive: profile.id == viewModel.activeProfile?.id,
                                     onSelect: {
+                                        // Add this line to sync cards before switching
+                                        if let cardViewModel = AppState.shared.cardViewModel {
+                                            cardViewModel.syncCardsToActiveProfile()
+                                        }
+                                        
                                         viewModel.switchProfile(profile.id)
                                     },
                                     onDelete: {

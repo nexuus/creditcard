@@ -63,6 +63,19 @@ struct DetailedStatsView: View {
             if expandedSection == "cards" {
                 cardsByYearDetail
             }
+            
+            // 5/24 Status Row
+            statRow(
+                title: "Chase 5/24 Status",
+                value: "\(viewModel.calculate524Status().count)/5",
+                icon: "creditcard.and.arrow.up",
+                color: viewModel.isUnder524Rule() ? .green : .red,
+                section: "524rule"
+            )
+            
+            if expandedSection == "524rule" {
+                chase524Detail
+            }
         }
         .padding(16)
         .background(
@@ -154,6 +167,68 @@ struct DetailedStatsView: View {
         .padding(.bottom, 8)
     }
     
+    private var chase524Detail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Status message with color
+            HStack {
+                Image(systemName: viewModel.isUnder524Rule() ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundColor(viewModel.isUnder524Rule() ? .green : .red)
+                
+                Text(viewModel.isUnder524Rule()
+                    ? "You're under the Chase 5/24 rule and eligible for new Chase cards."
+                    : "You're at or over the Chase 5/24 limit.")
+                    .font(.subheadline)
+                    .foregroundColor(viewModel.isUnder524Rule() ? .green : .red)
+            }
+            .padding(.horizontal)
+            .padding(.top, 4)
+            
+            // Next eligible date if over limit
+            if !viewModel.isUnder524Rule(), let nextDate = viewModel.nextEligibleDate() {
+                HStack {
+                    Image(systemName: "calendar")
+                        .foregroundColor(.orange)
+                    
+                    Text("Next eligible: \(formatDate(nextDate))")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal)
+            }
+            
+            // Cards in the last 24 months
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Cards opened in the last 24 months:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                
+                ForEach(viewModel.calculate524Status().cards) { card in
+                    HStack {
+                        Text(card.name)
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Text(formatDate(card.dateOpened))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray6))
+                    )
+                    .padding(.horizontal)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+    
     private func statRow(title: String, value: String, icon: String, color: Color, section: String) -> some View {
         Button(action: {
             withAnimation(.spring()) {
@@ -176,7 +251,7 @@ struct DetailedStatsView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.secondary)
                 
-                if viewModel.pointsByYear().count > 0 && (section == "points" || section == "cards") {
+                if viewModel.pointsByYear().count > 0 && (section == "points" || section == "cards") || section == "524rule" {
                     Image(systemName: expandedSection == section ? "chevron.up" : "chevron.down")
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
@@ -197,5 +272,13 @@ struct DetailedStatsView: View {
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    // Helper for formatting dates consistently
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 }

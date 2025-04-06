@@ -34,10 +34,11 @@ class ProfileService: ObservableObject {
                 self.profiles = savedProfiles
                 print("📤 Loaded \(savedProfiles.count) profiles from local storage")
                 
-                // Try to load the active profile
+                // Set active profile based on the stored ID
                 if let activeProfileId = UserDefaults.standard.string(forKey: activeProfileKey),
                    let uuid = UUID(uuidString: activeProfileId),
                    let active = savedProfiles.first(where: { $0.id == uuid }) {
+                    // This will use the setter method and trigger the UI update
                     self.activeProfile = active
                     print("👤 Loaded active profile: \(active.name)")
                 } else if !savedProfiles.isEmpty {
@@ -54,6 +55,18 @@ class ProfileService: ObservableObject {
             // No profiles exist, create a default one
             createDefaultProfile()
         }
+    }
+    
+    func debugProfileCards(profileName: String) {
+        print("\n===== DEBUG: PROFILE CARDS FOR '\(profileName)' =====")
+        if let profile = profiles.first(where: { $0.name == profileName }) {
+            for (index, card) in profile.cards.enumerated() {
+                print("  Card \(index+1): \(card.name) (ID: \(card.id))")
+            }
+        } else {
+            print("  Profile not found")
+        }
+        print("=====================================\n")
     }
     
     func createDefaultProfile() {
@@ -84,6 +97,25 @@ class ProfileService: ObservableObject {
         }
     }
     
+    func updateActiveProfileCards(_ cards: [CreditCard]) {
+        guard let activeProfile = activeProfile,
+              let index = profiles.firstIndex(where: { $0.id == activeProfile.id }) else {
+            print("❌ No active profile found to update cards")
+            return
+        }
+        
+        // Create copies of the cards to ensure independence between profiles
+        let cardsCopy = cards.map { $0 }
+        
+        // Update only in the profiles array (not directly to activeProfile)
+        profiles[index].cards = cardsCopy
+        
+        // Save the changes
+        saveProfiles()
+        
+        print("💾 Updated profile '\(profiles[index].name)' with \(cardsCopy.count) cards")
+    }
+    
     func deleteProfile(_ profileId: UUID) {
         profiles.removeAll { $0.id == profileId }
         
@@ -98,18 +130,31 @@ class ProfileService: ObservableObject {
         saveProfiles()
     }
     
+    
+    
     func setActiveProfile(_ profileId: UUID) {
+        // First save current cards if there's an active profile
+        if let cardViewModel = AppState.shared.cardViewModel,
+           activeProfile != nil {
+            cardViewModel.syncCardsToActiveProfile()
+        }
+        
         // Mark all profiles as inactive
         for i in 0..<profiles.count {
             profiles[i].isActive = (profiles[i].id == profileId)
         }
         
-        // Set the active profile
-        activeProfile = profiles.first(where: { $0.id == profileId })
-        
-        // Save the active profile ID
-        UserDefaults.standard.set(profileId.uuidString, forKey: activeProfileKey)
-        UserDefaults.standard.synchronize()
+        // Instead of directly modifying activeProfile, we reload it from the profiles array
+        // The @Published property will still trigger the UI update
+        if let newActiveProfile = profiles.first(where: { $0.id == profileId }) {
+            // We need to reload the profile reference since we can't modify it directly
+            UserDefaults.standard.set(profileId.uuidString, forKey: activeProfileKey)
+            
+            // Force the change to be reflected by loading profiles
+            loadProfiles()
+            
+            print("👤 Switched to profile: \(newActiveProfile.name)")
+        }
         
         saveProfiles()
     }

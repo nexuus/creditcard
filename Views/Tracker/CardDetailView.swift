@@ -14,6 +14,7 @@ struct CardDetailView: View {
     @State private var showingInactivateAlert = false
     @State private var showingReactivateAlert = false
     @State private var showingEditSheet = false
+    @State private var showingDeleteAlert = false
     
     // Date formatter
     private let dateFormatter: DateFormatter = {
@@ -164,6 +165,26 @@ struct CardDetailView: View {
                 }
                 .padding(.horizontal)
                 
+                // Delete Card Button
+                Button(action: {
+                    showingDeleteAlert = true
+                }) {
+                    HStack {
+                        Image(systemName: "trash")
+                            .font(.headline)
+                        
+                        Text("Delete Card")
+                            .font(.headline)
+                    }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+                }
+                .padding(.horizontal)
+                
                 // Card details section
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Card Details")
@@ -228,6 +249,8 @@ struct CardDetailView: View {
                 }
             }
         }
+        
+        
         .alert("Mark Card as Inactive", isPresented: $showingInactivateAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Mark Inactive", role: .destructive) {
@@ -248,6 +271,16 @@ struct CardDetailView: View {
             // Show the edit card form
             EditCardView(card: $card, viewModel: viewModel, isPresented: $showingEditSheet)
         }
+        .alert("Delete Card", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteCard()
+            }
+        } message: {
+            Text("This will permanently delete this card. This action cannot be undone.")
+        }
+        
+        
     }
     
     // Function to handle inactivating the card
@@ -265,6 +298,24 @@ struct CardDetailView: View {
         // Show feedback
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+    }
+    
+    private func deleteCard() {
+        // Find the index of this card in the viewModel's cards array
+        if let index = viewModel.cards.firstIndex(where: { $0.id == card.id }) {
+            // Remove the card
+            viewModel.cards.remove(at: index)
+            
+            // Save changes
+            viewModel.saveCards()
+            
+            // Show feedback
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            
+            // Go back to previous screen
+            presentationMode.wrappedValue.dismiss()
+        }
     }
     
     // Function to handle reactivating the card
