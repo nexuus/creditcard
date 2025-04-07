@@ -89,6 +89,7 @@ struct APIClient {
     }
     
     // Fetch credit card bonuses from the GitHub API
+    // Fetch credit card bonuses from the GitHub API
     static func fetchCardBonuses() async throws -> [CreditCardBonus] {
         print("🔄 Fetching credit card bonuses from GitHub API...")
         

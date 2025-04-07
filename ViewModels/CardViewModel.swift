@@ -273,6 +273,40 @@ extension CardViewModel {
         }
     }
     
+    // Add this function to CardViewModel
+    func testGitHubAPIDecoding() async {
+        print("🧪 Testing GitHub API Decoding")
+        
+        do {
+            let bonuses = try await APIClient.fetchCardBonuses()
+            print("✅ Successfully decoded \(bonuses.count) card bonuses")
+            
+            // Test the first card
+            if let firstCard = bonuses.first {
+                print("📊 First card: \(firstCard.name) by \(firstCard.issuer)")
+                print("💰 Offers: \(firstCard.offers.count)")
+                
+                // Test the first offer
+                if let firstOffer = firstCard.offers.first {
+                    print("🎁 Spend: $\(firstOffer.spend)")
+                    print("⏱️ Days: \(firstOffer.days)")
+                    
+                    // Test the first amount
+                    if let firstAmount = firstOffer.amount.first {
+                        print("💵 Amount: \(firstAmount.amount)")
+                        print("💰 Is Cash: \(firstAmount.isCash ?? false)")
+                    }
+                }
+                
+                // Test conversion to CreditCardInfo
+                let info = firstCard.toCreditCardInfo()
+                print("✅ Converted to CreditCardInfo: \(info.name), \(info.category), \(info.signupBonus) points")
+            }
+        } catch {
+            print("❌ Test failed: \(error)")
+        }
+    }
+    
     // Load cards from local storage
     private func loadCardsLocally() -> [CreditCard]? {
         guard let data = UserDefaults.standard.data(forKey: "savedCards") else {

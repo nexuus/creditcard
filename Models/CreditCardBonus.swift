@@ -4,9 +4,21 @@ import SwiftUI
 // Amount structure represents a reward amount
 struct Amount: Codable {
     let amount: Int
+    let isCash: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case amount
+        case isCash
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        amount = try container.decode(Int.self, forKey: .amount)
+        isCash = try container.decodeIfPresent(Bool.self, forKey: .isCash)
+    }
 }
 
-// Credit structure for any statement credits
+
 struct Credit: Codable {
     let amount: Int
     let description: String?
@@ -26,7 +38,6 @@ struct Credit: Codable {
         excluded = try container.decodeIfPresent(Bool.self, forKey: .excluded)
     }
 }
-
 // Offer structure representing a card's signup bonus offer
 struct Offer: Codable {
     let spend: Int
@@ -57,6 +68,7 @@ struct Offer: Codable {
     }
 }
 
+// Main card model matching the JSON structure
 // Main card model matching the JSON structure
 struct CreditCardBonus: Codable, Identifiable {
     let cardId: String
@@ -158,14 +170,14 @@ struct CreditCardBonus: Codable, Identifiable {
             applyURL: self.url
         )
     }
-    
+
     // Format the issuer name to be more readable
     private func formatIssuerName() -> String {
         return issuer
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
     }
-    
+
     // Format the card name for display
     private func formatDisplayName() -> String {
         // If issuer is part of the name, don't duplicate it
@@ -175,7 +187,7 @@ struct CreditCardBonus: Codable, Identifiable {
             return name
         }
     }
-    
+
     // Determine the bonus type based on the card details
     private func determineBonusType() -> String {
         if universalCashbackPercent != nil && universalCashbackPercent ?? 0 > 0 {
@@ -198,7 +210,7 @@ struct CreditCardBonus: Codable, Identifiable {
             return "points"
         }
     }
-    
+
     // Determine the card category
     private func determineCategory() -> String {
         // Check card name first for specific patterns

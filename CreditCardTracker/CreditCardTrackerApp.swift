@@ -15,23 +15,27 @@ struct CreditCardTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             MainAppView(viewModel: viewModel)
-                .onAppear {
-                    // First load profile data
-                    _ = ProfileService.shared
+            // In your CreditCardTrackerApp.swift, add this to the onAppear block
+            .onAppear {
+                // First load profile data
+                _ = ProfileService.shared
+                
+                // Then load card data with loading state
+                viewModel.initializeWithLoadingState()
+                
+                // Then load API data in the background
+                Task {
+                    // Test GitHub API decoding
+                    await viewModel.testGitHubAPIDecoding()
                     
-                    // Then load card data with loading state
-                    viewModel.initializeWithLoadingState()
+                    // A slight delay to ensure UI is responsive first
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    await viewModel.loadCreditCardsFromAPI()
                     
-                    // Then load API data in the background
-                    Task {
-                        // A slight delay to ensure UI is responsive first
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                        await viewModel.loadCreditCardsFromAPI()
-                        
-                        // Preload common card images for better UX
-                        CreditCardService.shared.preloadCommonCardImages()
-                    }
+                    // Preload common card images for better UX
+                    CreditCardService.shared.preloadCommonCardImages()
                 }
+            }
         }
     }
 }
