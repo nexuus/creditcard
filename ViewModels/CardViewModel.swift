@@ -373,36 +373,39 @@ extension CardViewModel {
         apiLoadingError = nil
         
         do {
-            if forceRefresh {
-                // Clear caches if force refresh is requested
-                print("🔄 Force refreshing card data...")
-                CreditCardService.shared.clearAllCaches()
-            }
-            
-            print("📊 Fetching credit card catalog...")
-            // Use enhanced fetching method with caching
-            availableCreditCards = try await CreditCardService.shared.fetchCreditCards()
-            print("✅ Successfully loaded \(availableCreditCards.count) cards")
+            print("📊 Fetching credit card catalog from GitHub API...")
+            let bonuses = try await APIClient.fetchCardBonuses()
+            let bonusCards = bonuses.map { $0.toCreditCardInfo() }
+            availableCreditCards = bonusCards
+            print("✅ Successfully loaded \(bonusCards.count) cards from GitHub API")
             
             // Filter out the popular cards
             filterPopularCards()
-            
-            // Prefetch details for popular cards
-            await prefetchPopularCardDetails()
         } catch {
-            print("❌ API Error: \(error)")
+            print("❌ GitHub API Error: \(error.localizedDescription)")
             apiLoadingError = "Failed to load credit cards: \(error.localizedDescription)"
             
-            // If we fail to load cards, check if we have any cached
+            // Fall back to sample data if needed
             if availableCreditCards.isEmpty {
-                // Fall back to sample data if no cards are available
                 availableCreditCards = CreditCardService.shared.getSampleCreditCardData()
-                popularCreditCards = availableCreditCards // For sample data, use all cards
+                popularCreditCards = availableCreditCards
                 print("⚠️ Using \(availableCreditCards.count) sample cards as fallback")
             }
         }
         
         isLoadingCards = false
+    }
+    
+    @MainActor
+    func getCardDetailsFromGitHub(for cardId: String) async -> CreditCardInfo? {
+        // Find the basic card first
+        guard let basicCard = availableCreditCards.first(where: { $0.id == cardId }) else {
+            return nil
+        }
+        
+        // We already have all the available data from the GitHub API
+        // since it returns everything in one call
+        return basicCard
     }
     
     // Force-refresh all data
@@ -491,46 +494,17 @@ extension CardViewModel {
     // Method to prefetch details for popular cards
     @MainActor
     func prefetchPopularCardDetails() async {
-        isLoadingDetails = true
-        print("🔍 Prefetching details for popular cards...")
-        
-        // Get the top 10 popular cards to prefetch
-        let topPopularCards = popularCreditCards.prefix(10)
-        
-        // Create a task group to fetch details in parallel
-        await withTaskGroup(of: Void.self) { group in
-            for card in topPopularCards {
-                group.addTask {
-                    if let detailedCard = await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: card.id) {
-                        // Update in our card list
-                        await MainActor.run {
-                            if let index = self.popularCreditCards.firstIndex(where: { $0.id == card.id }) {
-                                self.popularCreditCards[index] = detailedCard
-                            }
-                            
-                            if let index = self.availableCreditCards.firstIndex(where: { $0.id == card.id }) {
-                                self.availableCreditCards[index] = detailedCard
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
+        // No need to fetch details separately with GitHub API
+        // as all data comes in a single response
         isLoadingDetails = false
-        print("✅ Prefetched details for top popular cards")
+        print("✅ Using GitHub API - no detail prefetching needed")
     }
     
     // Fetch card details with caching
     @MainActor
     func getCardDetails(for cardId: String) async -> CreditCardInfo? {
-        // Check if we already have a detailed card
-        if let existingCard = availableCreditCards.first(where: { $0.id == cardId && $0.benefits != nil }) {
-            return existingCard
-        }
-        
-        // Otherwise fetch the details with caching
-        return await CreditCardService.shared.fetchAndUpdateCardDetail(cardKey: cardId)
+        // Use GitHub API data only
+        return await getCardDetailsFromGitHub(for: cardId)
     }
     
     // Search credit cards by term

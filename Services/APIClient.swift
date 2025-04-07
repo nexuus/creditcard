@@ -2,66 +2,120 @@
 //  APIClient.swift
 //  CreditCardTracker
 //
-//  Created by Hassan  on 2/26/25.
-//
 
 import Foundation
 
-// Make sure your APIClient struct has the correct API credentials:
-
-//
-//  APIClient.swift
-
 struct APIClient {
-    // Use your actual RapidAPI credentials
-    static let apiKey = "7afdf81bdfmshec1b3d513d53327p1aa78bjsncf0b3e26c2a5"
-    static let apiHost = "rewards-credit-card-api.p.rapidapi.com"
-    static let baseURL = "https://rewards-credit-card-api.p.rapidapi.com"
+    // MARK: - API Configuration
+    
+    // Keep these for backward compatibility but they're no longer used
+    static let apiKey = ""
+    static let apiHost = ""
+    static let baseURL = ""
+    
+    // GitHub credit card bonuses API configuration - updated URL
+    static let bonusesBaseURL = "https://raw.githubusercontent.com/andenacitelli/credit-card-bonuses-api/main"
+    static let bonusesDataURL = "\(bonusesBaseURL)/exports/data.json"
+    
+    // MARK: - Error Types
     
     enum APIError: Error {
         case invalidURL
         case requestFailed(Error)
         case invalidResponse
         case decodingFailed(Error)
+        case rateLimitExceeded
+        case emptyResponse
     }
     
-    // Generic function to fetch data from any endpoint
+    // MARK: - API Methods
+    
+    // Generic function to maintain backward compatibility
+    // Modify the fetch<T> method to handle the new model structure
+    // Modify the fetch<T> method to handle the new model structure
     static func fetch<T: Decodable>(endpoint: String, parameters: [String: String] = [:]) async throws -> T {
-        print("🌐 API REQUEST: \(baseURL + endpoint)")
+        print("⚠️ Legacy fetch method called - redirecting to GitHub API")
         
-        // Construct URL with parameters
-        var components = URLComponents(string: baseURL + endpoint)
-        
-        if !parameters.isEmpty {
-            components?.queryItems = parameters.map { URLQueryItem(name: $0.key, value: $0.value) }
-            print("📝 Parameters: \(parameters)")
+        // For compatibility, redirect to GitHub API instead
+        if T.self == CreditCardAPIResponse.self {
+            let bonuses = try await fetchCardBonuses()
+            
+            // Convert GitHub API response to match the expected type
+            let convertedResponse = bonuses.map { bonus -> APICard in
+                // Get the best offer for this card
+                let bestOffer = bonus.offers.max(by: {
+                    $0.amount.first?.amount ?? 0 < $1.amount.first?.amount ?? 0
+                })
+                
+                let bonusAmount = bestOffer?.amount.first?.amount ?? 0
+                let spendRequired = bestOffer?.spend ?? 0
+                let timeframe = bestOffer?.days ?? 90
+                
+                // Format issuer name
+                let issuerName = bonus.issuer
+                    .replacingOccurrences(of: "_", with: " ")
+                    .capitalized
+                
+                // Determine bonus type
+                var bonusType = "points"
+                if bonus.universalCashbackPercent != nil && bonus.universalCashbackPercent ?? 0 > 0 {
+                    bonusType = "cash back"
+                } else if bonus.issuer == "AMERICAN_EXPRESS" {
+                    bonusType = "Membership Rewards points"
+                } else if bonus.issuer == "CHASE" {
+                    bonusType = "Ultimate Rewards points"
+                }
+                
+                return APICard(
+                    cardKey: bonus.cardId,
+                    cardName: bonus.name,
+                    cardIssuer: issuerName,
+                    spendType: bonusType,
+                    earnMultiplier: Double(bonusAmount) / 1000.0,
+                    earnMultiplierValue: Double(bonusAmount),
+                    spendBonusDesc: "Earn \(bonusAmount) \(bonusType) after spending $\(spendRequired) in \(timeframe/30) months",
+                    limitBeginDate: "",
+                    limitEndDate: "",
+                    isSpendLimit: 1,
+                    spendLimit: Double(spendRequired),
+                    spendLimitResetPeriod: "\(timeframe/30) months"
+                )
+            } as! T
+            
+            return convertedResponse
         }
         
-        guard let url = components?.url else {
-            print("❌ Invalid URL: \(baseURL + endpoint)")
+        throw APIError.invalidResponse
+    }
+    
+    // Fetch credit card bonuses from the GitHub API
+    static func fetchCardBonuses() async throws -> [CreditCardBonus] {
+        print("🔄 Fetching credit card bonuses from GitHub API...")
+        
+        guard let url = URL(string: bonusesDataURL) else {
+            print("❌ Invalid URL for GitHub bonuses API")
             throw APIError.invalidURL
         }
         
-        // Create request with headers
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.addValue(apiKey, forHTTPHeaderField: "x-rapidapi-key")
-        request.addValue(apiHost, forHTTPHeaderField: "x-rapidapi-host")
+        // Create a URLSession configuration that doesn't store credentials
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
         
-        print("📤 Sending request to: \(url.absoluteString)")
+        let session = URLSession(configuration: config)
         
-        // Make request
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(from: url)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Not an HTTP response")
                 throw APIError.invalidResponse
             }
             
-            print("📥 Response status: \(httpResponse.statusCode)")
+            print("📥 GitHub API response status: \(httpResponse.statusCode)")
             
-            // Check response status
             guard (200...299).contains(httpResponse.statusCode) else {
                 print("❌ HTTP Error: \(httpResponse.statusCode)")
                 if let errorText = String(data: data, encoding: .utf8) {
@@ -70,27 +124,21 @@ struct APIClient {
                 throw APIError.invalidResponse
             }
             
-            // Log response for debugging
+            // Log response preview for debugging
             if let jsonString = String(data: data, encoding: .utf8) {
                 let previewLength = min(500, jsonString.count)
                 let preview = jsonString.prefix(previewLength)
-                print("✅ API response (\(data.count) bytes): \(preview)...")
+                print("✅ GitHub API response (\(data.count) bytes): \(preview)...")
             }
             
             do {
                 let decoder = JSONDecoder()
-                let decoded = try decoder.decode(T.self, from: data)
-                print("✅ Successfully decoded response to \(T.self)")
-                return decoded
+                let bonuses = try decoder.decode([CreditCardBonus].self, from: data)
+                print("✅ Successfully fetched \(bonuses.count) bonuses from GitHub API")
+                return bonuses
             } catch {
                 print("❌ Decoding error: \(error)")
-                print("❌ Failed to decode to \(T.self)")
-                
-                // Print the raw JSON for debugging
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("Raw JSON: \(jsonString)")
-                }
-                
+                print("❌ Failed to decode GitHub API response: \(error)")
                 throw APIError.decodingFailed(error)
             }
         } catch {
@@ -101,68 +149,47 @@ struct APIClient {
             throw APIError.requestFailed(error)
         }
     }
-}
-
-extension APIClient {
-    // Specific method for the card search endpoint to ensure proper handling
-    // Update this method in APIClient.swift:
-
-    // Specific method for the card search endpoint to ensure proper handling
+    
+    // Implement search functionality using GitHub API data
     static func fetchCardsBySearchTerm(_ term: String) async throws -> CardSearchAPIResponse {
-        // URL encode the search term
-        guard let encodedTerm = term.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            throw APIError.invalidURL
-        }
+        print("🔍 Searching cards with term: \(term) using GitHub API data")
         
-        let endpoint = "/creditcard-detail-namesearch/\(encodedTerm)"
-        print("🔍 Searching cards with term: \(term)")
+        // First fetch all cards from GitHub
+        let allBonuses = try await fetchCardBonuses()
         
-        return try await fetch(endpoint: endpoint)
+        // Convert to the expected response type and filter by search term
+        let searchResults = allBonuses
+            .filter { bonus in
+                // Case-insensitive search in card name and issuer
+                bonus.name.lowercased().contains(term.lowercased()) ||
+                bonus.issuer.lowercased().contains(term.lowercased())
+            }
+            .map { bonus -> CardSearchResult in
+                // Convert to the expected CardSearchResult type
+                return CardSearchResult(
+                    cardKey: bonus.id,
+                    cardIssuer: bonus.issuer,
+                    cardName: bonus.name
+                )
+            }
+        
+        print("✅ Found \(searchResults.count) cards matching '\(term)'")
+        return searchResults
     }
-    // Test a specific card detail endpoint
+    
+    // Stub methods for compatibility
     static func testCardDetailEndpoint(cardKey: String) async {
-        print("🧪 Testing card detail endpoint for: \(cardKey)")
+        print("⚠️ testCardDetailEndpoint called but using GitHub API instead")
+    }
+    
+    static func testSearchAPI(term: String) async {
+        print("⚠️ testSearchAPI called but using GitHub API instead")
         
         do {
-            // Create the URL for testing
-            let testURL = URL(string: baseURL + "/creditcard-detail-bycard/\(cardKey)")!
-            var request = URLRequest(url: testURL)
-            request.httpMethod = "GET"
-            request.addValue(apiKey, forHTTPHeaderField: "x-rapidapi-key")
-            request.addValue(apiHost, forHTTPHeaderField: "x-rapidapi-host")
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ Not an HTTP response")
-                return
-            }
-            
-            print("📥 HTTP Status: \(httpResponse.statusCode)")
-            
-            if (200...299).contains(httpResponse.statusCode) {
-                print("✅ Successful response")
-                
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    let preview = jsonString.prefix(500)
-                    print("📄 Data preview: \(preview)...")
-                }
-                
-                do {
-                    let decoder = JSONDecoder()
-                    let decoded = try decoder.decode(CardDetailAPIResponse.self, from: data)
-                    print("✅ Successfully decoded \(decoded.count) cards")
-                } catch {
-                    print("❌ Decoding error: \(error)")
-                }
-            } else {
-                print("❌ HTTP Error: \(httpResponse.statusCode)")
-                if let errorText = String(data: data, encoding: .utf8) {
-                    print("Error details: \(errorText)")
-                }
-            }
+            let results = try await fetchCardsBySearchTerm(term)
+            print("✅ Found \(results.count) cards matching '\(term)'")
         } catch {
-            print("❌ Network error: \(error)")
+            print("❌ Error searching: \(error)")
         }
     }
 }

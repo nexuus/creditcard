@@ -44,6 +44,7 @@
 		5CF29B5D2D6F5B6600AEBA27 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B5C2D6F5B5F00AEBA27 /* APIModels.swift */; };
 		5CF29B5F2D6FF2F900AEBA27 /* CardSearchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B5E2D6FF2F800AEBA27 /* CardSearchModel.swift */; };
 		5CF29B612D70366100AEBA27 /* Apptheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF29B602D70365E00AEBA27 /* Apptheme.swift */; };
+		5CF3117F2DA327B800A255A2 /* CreditCardBonus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF3117E2DA327B800A255A2 /* CreditCardBonus.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +105,7 @@
 		5CF29B5C2D6F5B5F00AEBA27 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		5CF29B5E2D6FF2F800AEBA27 /* CardSearchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardSearchModel.swift; sourceTree = "<group>"; };
 		5CF29B602D70365E00AEBA27 /* Apptheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Apptheme.swift; sourceTree = "<group>"; };
+		5CF3117E2DA327B800A255A2 /* CreditCardBonus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditCardBonus.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -176,6 +178,7 @@
 		5CF29B092D6F4B6E00AEBA27 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				5CF3117E2DA327B800A255A2 /* CreditCardBonus.swift */,
 				5C21437A2D8F6E8B00A202AD /* UserProfile.swift */,
 				5CF29B5E2D6FF2F800AEBA27 /* CardSearchModel.swift */,
 				5CF29B5C2D6F5B5F00AEBA27 /* APIModels.swift */,
@@ -434,6 +437,7 @@
 				5CF29B312D6F4F2300AEBA27 /* UserService.swift in Sources */,
 				5CF29B2D2D6F4F1200AEBA27 /* CreditCard.swift in Sources */,
 				5CF29B2E2D6F4F1600AEBA27 /* CreditCardInfo.swift in Sources */,
+				5CF3117F2DA327B800A255A2 /* CreditCardBonus.swift in Sources */,
 				5CF29B5D2D6F5B6600AEBA27 /* APIModels.swift in Sources */,
 				5C2143832D8F6ED700A202AD /* ProfileRowView.swift in Sources */,
 				5CF29B5B2D6F5A0B00AEBA27 /* APIClient.swift in Sources */,
