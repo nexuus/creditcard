@@ -20,34 +20,38 @@ struct Amount: Codable {
 
 
 struct Credit: Codable {
-    let amount: Int
+    let value: Int  // Changed from 'amount' to 'value'
     let description: String?
+    let weight: Double?  // Add this property
+    let currency: String?  // Add this property
     let excluded: Bool?
     
-    // Add CodingKeys as the API might have optional fields
     enum CodingKeys: String, CodingKey {
-        case amount
+        case value  // Changed from 'amount' to 'value'
         case description
+        case weight
+        case currency
         case excluded
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        amount = try container.decode(Int.self, forKey: .amount)
+        value = try container.decode(Int.self, forKey: .value)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        weight = try container.decodeIfPresent(Double.self, forKey: .weight)
+        currency = try container.decodeIfPresent(String.self, forKey: .currency)
         excluded = try container.decodeIfPresent(Bool.self, forKey: .excluded)
     }
 }
 // Offer structure representing a card's signup bonus offer
 struct Offer: Codable {
-    let spend: Int
+    let spend: Double  // Changed from Int to Double
     let amount: [Amount]
     let days: Int
     let credits: [Credit]
     let details: String?
     let expiration: String?
     
-    // Add CodingKeys as some fields are optional
     enum CodingKeys: String, CodingKey {
         case spend
         case amount
@@ -59,7 +63,7 @@ struct Offer: Codable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        spend = try container.decode(Int.self, forKey: .spend)
+        spend = try container.decode(Double.self, forKey: .spend)  // Changed to Double
         amount = try container.decode([Amount].self, forKey: .amount)
         days = try container.decode(Int.self, forKey: .days)
         credits = try container.decode([Credit].self, forKey: .credits)
@@ -67,7 +71,6 @@ struct Offer: Codable {
         expiration = try container.decodeIfPresent(String.self, forKey: .expiration)
     }
 }
-
 // Main card model matching the JSON structure
 // Main card model matching the JSON structure
 struct CreditCardBonus: Codable, Identifiable {

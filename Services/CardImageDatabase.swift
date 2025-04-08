@@ -2,10 +2,6 @@
 //  CardImageDatabase.swift
 //  CreditCardTracker
 //
-//  Created by Hassan  on 3/18/25.
-//
-
-// Add this as a new file: Services/CardImageDatabase.swift
 
 import SwiftUI
 import Foundation
@@ -14,6 +10,11 @@ import Foundation
 class CardImageDatabase {
     // Singleton instance
     static let shared = CardImageDatabase()
+    
+    // Thread-safe queue for database operations
+    private let databaseQueue = DispatchQueue(label: "com.creditcardtracker.CardImageDatabase", attributes: .concurrent)
+    
+    private let baseImageURL = "https://www.offeroptimist.com"
     
     // Path to the local database file
     private let databaseURL: URL? = {
@@ -45,14 +46,13 @@ class CardImageDatabase {
     // MARK: - Database Structures
     
     /// Structure to store card image information
-    /// Structure to store card image information - with mutable properties
     struct CardImageInfo: Codable {
         let cardId: String
         let issuer: String
         let cardName: String
         let imageURL: String
-        var localPath: String?  // Changed to var so it can be updated
-        var lastUpdated: Date   // Changed to var so it can be updated
+        var localPath: String?
+        var lastUpdated: Date
         let source: String      // "api", "manual", "generated"
     }
     
@@ -76,22 +76,29 @@ class CardImageDatabase {
         await loadDatabase()
         
         // Initialize with default mappings if empty
-        if cardImageMap.isEmpty {
-            initializeDefaultMappings()
+        databaseQueue.sync {
+            if cardImageMap.isEmpty {
+                initializeDefaultMappings()
+            }
         }
         
         isInitialized = true
     }
     
     /// Get image for a specific card
-    func getImageForCard(cardId: String, card: CreditCardInfo) async -> UIImage? {
+    func getImageForCard(cardId: String, card: CreditCardInfo?) async -> UIImage? {
         // Ensure database is initialized
         if !isInitialized {
             await initialize()
         }
         
-        // Check if we have this card in our database
-        if let imageInfo = cardImageMap[cardId], !imageInfo.imageURL.isEmpty {
+        // Check if we have this card in our database (thread-safe read)
+        var imageInfo: CardImageInfo?
+        databaseQueue.sync {
+            imageInfo = cardImageMap[cardId]
+        }
+        
+        if let imageInfo = imageInfo, !imageInfo.imageURL.isEmpty {
             // If we have a local path, load from there
             if let localPath = imageInfo.localPath, !localPath.isEmpty {
                 if let localImage = loadImageFromLocalPath(localPath) {
@@ -103,72 +110,99 @@ class CardImageDatabase {
             if let image = await downloadImage(from: imageInfo.imageURL) {
                 // Save the image to local storage for next time
                 if let localPath = saveImageToLocalStorage(image, cardId: cardId) {
-                    // Update the database entry
-                    var updatedInfo = imageInfo
-                    updatedInfo.localPath = localPath
-                    cardImageMap[cardId] = updatedInfo
-                    saveDatabase()
+                    // Update the database entry (thread-safe)
+                    databaseQueue.async(flags: .barrier) {
+                        var updatedInfo = imageInfo
+                        updatedInfo.localPath = localPath
+                        self.cardImageMap[cardId] = updatedInfo
+                        self.saveDatabase()
+                    }
                 }
                 return image
             }
         }
         
+        // Only proceed if we have a valid card object
+        guard let card = card else {
+            print("⚠️ No card info provided for ID: \(cardId)")
+            return nil
+        }
+        
         // Otherwise, try to find by card name and issuer
         let searchKey = "\(card.issuer.lowercased())-\(card.name.lowercased())"
-        for (_, imageInfo) in cardImageMap where
-            "\(imageInfo.issuer.lowercased())-\(imageInfo.cardName.lowercased())".contains(searchKey) {
-            
+        
+        var matchedCardInfo: CardImageInfo?
+        var matchedCardInfoURL: String?
+        
+        // Thread-safe read
+        databaseQueue.sync {
+            for (_, info) in cardImageMap where
+                "\(info.issuer.lowercased())-\(info.cardName.lowercased())".contains(searchKey) {
+                matchedCardInfo = info
+                matchedCardInfoURL = info.imageURL
+                break
+            }
+        }
+        
+        // If we found a match, try to load the image
+        if let matchedInfo = matchedCardInfo, let imageURL = matchedCardInfoURL {
             // If we have a local path, load from there
-            if let localPath = imageInfo.localPath, !localPath.isEmpty {
+            if let localPath = matchedInfo.localPath, !localPath.isEmpty {
                 if let localImage = loadImageFromLocalPath(localPath) {
-                    // Update the mapping with this card ID for future lookups
-                    cardImageMap[cardId] = CardImageInfo(
-                        cardId: cardId,
-                        issuer: card.issuer,
-                        cardName: card.name,
-                        imageURL: imageInfo.imageURL,
-                        localPath: localPath,
-                        lastUpdated: Date(),
-                        source: "matched"
-                    )
-                    saveDatabase()
+                    // Update the mapping with this card ID for future lookups (thread-safe)
+                    databaseQueue.async(flags: .barrier) {
+                        self.cardImageMap[cardId] = CardImageInfo(
+                            cardId: cardId,
+                            issuer: card.issuer,
+                            cardName: card.name,
+                            imageURL: imageURL,
+                            localPath: localPath,
+                            lastUpdated: Date(),
+                            source: "matched"
+                        )
+                        self.saveDatabase()
+                    }
                     return localImage
                 }
             }
             
             // Try to download from the URL
-            if let image = await downloadImage(from: imageInfo.imageURL) {
+            if let image = await downloadImage(from: imageURL) {
                 // Save the image to local storage for next time
                 if let localPath = saveImageToLocalStorage(image, cardId: cardId) {
-                    // Update the database entry
-                    cardImageMap[cardId] = CardImageInfo(
-                        cardId: cardId,
-                        issuer: card.issuer,
-                        cardName: card.name,
-                        imageURL: imageInfo.imageURL,
-                        localPath: localPath,
-                        lastUpdated: Date(),
-                        source: "matched"
-                    )
-                    saveDatabase()
+                    // Update the database entry (thread-safe)
+                    databaseQueue.async(flags: .barrier) {
+                        self.cardImageMap[cardId] = CardImageInfo(
+                            cardId: cardId,
+                            issuer: card.issuer,
+                            cardName: card.name,
+                            imageURL: imageURL,
+                            localPath: localPath,
+                            lastUpdated: Date(),
+                            source: "matched"
+                        )
+                        self.saveDatabase()
+                    }
                     return image
                 }
             }
         }
         
         // If we couldn't find an image, add to database with empty URL
-        // This avoids repeated searches for the same card
-        if cardImageMap[cardId] == nil {
-            cardImageMap[cardId] = CardImageInfo(
-                cardId: cardId,
-                issuer: card.issuer,
-                cardName: card.name,
-                imageURL: "",
-                localPath: nil,
-                lastUpdated: Date(),
-                source: "pending"
-            )
-            saveDatabase()
+        // This avoids repeated searches for the same card (thread-safe)
+        databaseQueue.async(flags: .barrier) {
+            if self.cardImageMap[cardId] == nil {
+                self.cardImageMap[cardId] = CardImageInfo(
+                    cardId: cardId,
+                    issuer: card.issuer,
+                    cardName: card.name,
+                    imageURL: "",
+                    localPath: nil,
+                    lastUpdated: Date(),
+                    source: "pending"
+                )
+                self.saveDatabase()
+            }
         }
         
         return nil
@@ -176,42 +210,48 @@ class CardImageDatabase {
     
     /// Add or update an image mapping
     func addImageMapping(cardId: String, issuer: String, cardName: String, imageURL: String) {
-        cardImageMap[cardId] = CardImageInfo(
-            cardId: cardId,
-            issuer: issuer,
-            cardName: cardName,
-            imageURL: imageURL,
-            localPath: nil,
-            lastUpdated: Date(),
-            source: "manual"
-        )
-        saveDatabase()
+        databaseQueue.async(flags: .barrier) {
+            self.cardImageMap[cardId] = CardImageInfo(
+                cardId: cardId,
+                issuer: issuer,
+                cardName: cardName,
+                imageURL: imageURL,
+                localPath: nil,
+                lastUpdated: Date(),
+                source: "manual"
+            )
+            self.saveDatabase()
+        }
     }
     
     /// Add an image from API
     func addImageFromAPI(cardId: String, issuer: String, cardName: String, imageURL: String) {
-        // Only add if we don't already have a manual entry
-        if let existing = cardImageMap[cardId], existing.source == "manual" {
-            return
+        databaseQueue.async(flags: .barrier) {
+            // Only add if we don't already have a manual entry
+            if let existing = self.cardImageMap[cardId], existing.source == "manual" {
+                return
+            }
+            
+            self.cardImageMap[cardId] = CardImageInfo(
+                cardId: cardId,
+                issuer: issuer,
+                cardName: cardName,
+                imageURL: imageURL,
+                localPath: nil,
+                lastUpdated: Date(),
+                source: "api"
+            )
+            self.saveDatabase()
         }
-        
-        cardImageMap[cardId] = CardImageInfo(
-            cardId: cardId,
-            issuer: issuer,
-            cardName: cardName,
-            imageURL: imageURL,
-            localPath: nil,
-            lastUpdated: Date(),
-            source: "api"
-        )
-        saveDatabase()
     }
     
     /// Clear the database
     func clearDatabase() {
-        cardImageMap.removeAll()
-        saveDatabase()
-        isInitialized = false
+        databaseQueue.async(flags: .barrier) {
+            self.cardImageMap.removeAll()
+            self.saveDatabase()
+            self.isInitialized = false
+        }
     }
     
     // MARK: - Private Methods
@@ -227,15 +267,24 @@ class CardImageDatabase {
             if FileManager.default.fileExists(atPath: databaseURL.path) {
                 let data = try Data(contentsOf: databaseURL)
                 let decoder = JSONDecoder()
-                cardImageMap = try decoder.decode([String: CardImageInfo].self, from: data)
-                print("✅ Loaded card image database with \(cardImageMap.count) entries")
+                
+                // Thread-safe write
+                let decodedMap = try decoder.decode([String: CardImageInfo].self, from: data)
+                databaseQueue.async(flags: .barrier) {
+                    self.cardImageMap = decodedMap
+                }
+                print("✅ Loaded card image database with \(decodedMap.count) entries")
             } else {
                 print("ℹ️ No existing card image database found, creating new one")
-                cardImageMap = [:]
+                databaseQueue.async(flags: .barrier) {
+                    self.cardImageMap = [:]
+                }
             }
         } catch {
             print("❌ Failed to load card image database: \(error)")
-            cardImageMap = [:]
+            databaseQueue.async(flags: .barrier) {
+                self.cardImageMap = [:]
+            }
         }
     }
     
@@ -246,11 +295,17 @@ class CardImageDatabase {
             return
         }
         
+        // Create a local copy to avoid holding the lock during file I/O
+        // Fix: Initialize the variable immediately
+        let imagesToSave: [String: CardImageInfo] = databaseQueue.sync {
+            return self.cardImageMap
+        }
+        
         do {
             let encoder = JSONEncoder()
-            let data = try encoder.encode(cardImageMap)
+            let data = try encoder.encode(imagesToSave)
             try data.write(to: databaseURL)
-            print("✅ Saved card image database with \(cardImageMap.count) entries")
+            print("✅ Saved card image database with \(imagesToSave.count) entries")
         } catch {
             print("❌ Failed to save card image database: \(error)")
         }
@@ -286,26 +341,48 @@ class CardImageDatabase {
     }
     
     /// Download an image from a URL
+    /// Download an image from a URL
     private func downloadImage(from urlString: String) async -> UIImage? {
-        guard let url = URL(string: urlString) else {
-            print("❌ Invalid image URL: \(urlString)")
+        guard !urlString.isEmpty else {
+            print("❌ Empty image URL")
             return nil
         }
+        
+        // Handle relative URLs by prepending base URL if needed
+        let finalURLString: String
+        if urlString.hasPrefix("/") {
+            finalURLString = baseImageURL + urlString
+        } else {
+            finalURLString = urlString
+        }
+        
+        guard let url = URL(string: finalURLString) else {
+            print("❌ Invalid image URL: \(finalURLString)")
+            return nil
+        }
+        
+        print("🌐 Attempting to download image from: \(finalURLString)")
         
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                print("❌ Invalid response downloading image from \(urlString)")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Not an HTTP response downloading image")
+                return nil
+            }
+            
+            print("📥 Image download response status: \(httpResponse.statusCode)")
+            
+            guard (200...299).contains(httpResponse.statusCode) else {
+                print("❌ HTTP Error: \(httpResponse.statusCode) downloading image")
                 return nil
             }
             
             if let image = UIImage(data: data) {
-                print("✅ Successfully downloaded image from \(urlString)")
+                print("✅ Successfully downloaded image from \(finalURLString)")
                 return image
             } else {
-                print("❌ Invalid image data from \(urlString)")
+                print("❌ Invalid image data from \(finalURLString)")
                 return nil
             }
         } catch {
